@@ -1,6 +1,6 @@
 # 📚 University Projects  
 
-This repository contains various university projects related to **statistics, data science, and econometrics**.  
+This repository contains various university projects related to **quantitative finance**.  
 Each project applies theoretical concepts to real-world data analysis.  
 
 ---
