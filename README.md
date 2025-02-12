@@ -46,7 +46,7 @@ Please use the link above to access the full report.
 ---
 
 ## 📢 Stay Updated  
-Follow me on [LinkedIn](https://www.linkedin.com/in/loris-diotallevi/) for more projects in **quantitative finance, econometrics, and machine learning**! 🚀  
+Follow me on [LinkedIn](https://www.linkedin.com/in/loris-diotallevi/) for more projects in **quantitative finance and machine learning**! 🚀  
 
 
 
