@@ -40,7 +40,8 @@ Each project applies theoretical concepts to real-world financial and economic d
 ---
 
 ## 📢 Stay Updated  
-Follow me on [LinkedIn]([https://www.linkedin.com/in/LorisDiotallevi/](https://www.linkedin.com/in/loris-diotallevi/)) for more projects in **quantitative finance, econometrics, and machine learning**! 🚀
+Follow me on [LinkedIn](https://www.linkedin.com/in/loris-diotallevi/) for more projects in **quantitative finance, econometrics, and machine learning**! 🚀
+
 
 
 
