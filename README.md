@@ -1,15 +1,15 @@
 # 📚 University Projects  
 
-This repository contains various university projects related to **quantitative finance** and **statistical analysis**.  
+This repository contains various university projects focused on **quantitative finance** and **statistical analysis**.  
 Each project applies theoretical concepts to real-world financial and economic data.  
 
 ---
 
-## 📝 Projects Included
+## 📝 Projects Included  
 
 ### 1️⃣ Dependency Measures Analysis  
-📌 **Objective**: Analyze **Pearson, Spearman, and Kendall correlation coefficients** to compare linear and non-linear dependencies in financial markets.  
-📌 **Methods**: Statistical analysis, correlation matrices, visualization of relationships.  
+📌 **Objective**: Investigate how dependency between stock returns evolves over time using **Pearson, Spearman, and Kendall correlation coefficients**.  
+📌 **Methods**: Statistical analysis, correlation matrices, visualization of relationships across different market regimes.  
 📌 **Notebook**: [🔗 View on GitHub](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/Team1_Dependency.ipynb)  
 
 ---
@@ -18,15 +18,16 @@ Each project applies theoretical concepts to real-world financial and economic d
 📌 **Objective**: Explore and compare different conformal inference techniques, including **Adaptive Conformal Inference (ACI)** and **Aggregated Adaptive Conformal Inference (AgACI)**.  
 📌 **Methods**: Implemented in **R** using R Markdown to analyze predictive intervals and adaptive rates in statistical models.  
 📌 **Files available:**  
-   - 📜 **R Markdown file**: [🔗 View `.Rmd` on GitHub](INSERT_RMD_LINK_HERE)  
+   - 📜 **R Markdown file**: [🔗 View `.Rmd` on GitHub](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/Conformal_Inference.Rmd)  
    - 🌍 **HTML Report**: [🔗 View online](https://LorisDiotallevi.github.io/UniversityProjects/Conformal_Inference.html)  
 
 📌 **Note**: Due to file size limitations, GitHub cannot preview `Conformal_Inference.html` directly.  
-Please use the link above to view it.
+Please use the link above to access the full report.
 
 ---
 
 ## 🚀 How to Use  
+
 📌 **View the notebooks** directly in GitHub by clicking the links above.  
 
 📌 **Run the Jupyter notebook in Google Colab** for interactive analysis:  
@@ -45,7 +46,7 @@ Please use the link above to view it.
 ---
 
 ## 📢 Stay Updated  
-Follow me on [LinkedIn](https://www.linkedin.com/in/loris-diotallevi/) for more projects in **quantitative finance, econometrics, and machine learning**! 🚀
+Follow me on [LinkedIn](https://www.linkedin.com/in/loris-diotallevi/) for more projects in **quantitative finance, econometrics, and machine learning**! 🚀  
 
 
 
