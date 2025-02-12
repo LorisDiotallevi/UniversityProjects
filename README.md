@@ -7,24 +7,28 @@ Each project applies theoretical concepts to real-world financial and economic d
 
 ## 📝 Projects Included
 
-### 1️⃣ Dependency Measures Analysis
-📌 **Objective**: Analyze **Pearson, Spearman, and Kendall correlation coefficients** to compare linear and non-linear dependencies.  
+### 1️⃣ Dependency Measures Analysis  
+📌 **Objective**: Analyze **Pearson, Spearman, and Kendall correlation coefficients** to compare linear and non-linear dependencies in financial markets.  
 📌 **Methods**: Statistical analysis, correlation matrices, visualization of relationships.  
 📌 **Notebook**: [🔗 View on GitHub](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/Team1_Dependency.ipynb)  
 
 ---
 
-### 2️⃣ Adaptive Conformal Inference & Aggregated Adaptive Conformal Inference (AgACI)
+### 2️⃣ Adaptive Conformal Inference & Aggregated Adaptive Conformal Inference (AgACI)  
 📌 **Objective**: Explore and compare different conformal inference techniques, including **Adaptive Conformal Inference (ACI)** and **Aggregated Adaptive Conformal Inference (AgACI)**.  
 📌 **Methods**: Implemented in **R** using R Markdown to analyze predictive intervals and adaptive rates in statistical models.  
 📌 **Files available:**  
    - 📜 **R Markdown file**: [🔗 View `.Rmd` on GitHub](INSERT_RMD_LINK_HERE)  
    - 🌍 **HTML Report**: [🔗 View online](https://LorisDiotallevi.github.io/UniversityProjects/Conformal_Inference.html)  
 
+📌 **Note**: Due to file size limitations, GitHub cannot preview `Conformal_Inference.html` directly.  
+Please use the link above to view it.
+
 ---
 
-## 🚀 How to Use
+## 🚀 How to Use  
 📌 **View the notebooks** directly in GitHub by clicking the links above.  
+
 📌 **Run the Jupyter notebook in Google Colab** for interactive analysis:  
    1. Open [Google Colab](https://colab.research.google.com/)  
    2. Click **File → Open Notebook**  
@@ -32,15 +36,17 @@ Each project applies theoretical concepts to real-world financial and economic d
       ```
       https://github.com/LorisDiotallevi/UniversityProjects
       ```
+
 📌 **Run the R Markdown file in RStudio**:  
-   - Download the `.Rmd` file from GitHub  
-   - Open it in **RStudio**  
-   - Click **"Knit"** to generate the HTML report  
+   1. Download the `.Rmd` file from GitHub  
+   2. Open it in **RStudio**  
+   3. Click **"Knit"** to generate the HTML report  
 
 ---
 
 ## 📢 Stay Updated  
 Follow me on [LinkedIn](https://www.linkedin.com/in/loris-diotallevi/) for more projects in **quantitative finance, econometrics, and machine learning**! 🚀
+
 
 
 
