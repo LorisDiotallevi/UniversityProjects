@@ -10,7 +10,7 @@ Each project applies theoretical concepts to real-world data analysis.
 ### 1️⃣ Dependency Measures Analysis
 📌 **Objective**: Analyze **Pearson, Spearman, and Kendall correlation coefficients** to compare linear and non-linear dependencies.  
 📌 **Methods**: Statistical analysis, correlation matrices, visualization of relationships.  
-📌 **Notebook**: [🔗 View on GitHub](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/Team1_Dependency.ipynb)  
+📌 **Notebook**: [🔗 View on GitHub]([https://github.com/LorisDiotallevi/UniversityProjects/blob/main/Team1_Dependency.ipynb](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/Team1_Dependency.ipynb))  
 
 *(More projects will be added...)*
 
