@@ -1,0 +1,1762 @@
+---
+title: "HW02"
+author: "Loris Diotallevi, Francesco Paolucci"
+date: "2025-01-12"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, include = TRUE, error = TRUE)
+```
+
+# Acknowledgments
+
+During the preparation of this work, we had discussions with the group formed by Elie Ghazzoul and Matteo Toschi to address doubts encountered while solving the problems. Additionally, we declare that ChatGPT was used as support during debugging and for verifying the code.
+
+# Part I
+
+## Point a
+
+The following section provides a formal description of conformal prediction and adaptive conformal inference (ACI). The content is based on the paper by Gibbs and Candes (2021).
+
+---
+
+# Conformal Inference Basics (Section 1.1)
+
+Conformal prediction is a technique in machine learning that transforms any prediction model into one that outputs *prediction intervals* or *sets*. These intervals are unique because they come with a formal guarantee: the true value of the target variable will lie within the interval a specific percentage of the time, such as 90% or 95%. 
+
+This is revolutionary because:
+
+1. It works with any machine learning model, whether it's a simple linear regression or a complex neural network.
+
+2. It gives reliable and understandable results, which is critical for high-stakes applications like finance or healthcare.
+
+3. It quantifies uncertainty, making black-box models more transparent and trustworthy.
+
+The ability to provide *guaranteed coverage* is what sets conformal prediction apart from traditional methods, which often struggle to deliver reliable uncertainty estimates, especially for unseen data.
+
+## How Does Conformal Prediction Work?
+
+Conformal prediction relies on three key components: *conformity scores, the **quantile function, and the **prediction set*. Let’s break these down.
+
+---
+
+### *1. Conformity Score*
+The conformity score is the heart of the conformal prediction framework. It measures how well a candidate prediction aligns with the model's output. In simple terms, it tells us if a prediction is “reasonable” or not, based on past data.
+
+- For a regression model predicting a single value \( \hat{\mu}(X) \) for a given input \( X \), a natural conformity score is:
+
+  \[
+  S(X, Y) = |\hat{\mu}(X) - Y|
+  \]
+  
+  This measures the absolute difference between the predicted value \( \hat{\mu}(X) \) and the actual observed value \( Y \). Smaller scores mean the prediction is closer to the true value.
+
+- For models that predict *quantiles* instead of single values (e.g., upper and lower bounds), a more sophisticated conformity score might be:
+
+  \[
+  S(X, Y) = \max\{\hat{q}(X; \alpha/2) - Y, Y - \hat{q}(X; 1 - \alpha/2)\}
+  \]
+  
+  Here, \( \hat{q}(X; p) \) represents the predicted quantile for a given probability \( p \). This score checks how far \( Y \) is from the predicted upper or lower quantiles.
+
+*Why is this important?*  
+The conformity score allows us to compare the new prediction against the model’s past performance, making it possible to decide whether the prediction is acceptable.
+
+---
+
+### *2. Quantile Function*
+The quantile function is how we decide the threshold for what counts as a “reasonable” prediction. It tells us how large the conformity score can be while still keeping the prediction within a desired level of certainty.
+
+To calculate the quantile function, we use a *calibration dataset* \( D_\text{cal} \), which is separate from the data used to train the model. The calibration dataset contains past data points \((X, Y)\), and we compute the conformity scores for these points. Then, we find the quantile \( Q(p) \) such that:
+
+\[
+Q(p) = \inf \left\{s : \frac{1}{|D_\text{cal}|} \sum_{(X, Y) \in D_\text{cal}} \mathbf{1}[S(X, Y) \leq s] \geq p \right\}
+\]
+
+In simple terms:
+
+- The quantile \( Q(p) \) is the smallest value of the conformity score \( S \) that ensures at least \( p \) fraction of the calibration scores are below it.
+
+- For example, if \( p = 0.9 \), \( Q(0.9) \) will capture the 90th percentile of conformity scores in the calibration dataset.
+
+*Why is this important?*  
+The quantile function dynamically adjusts the prediction intervals based on past data. This ensures that the intervals remain valid and reflect the actual uncertainty in the data.
+
+---
+
+### *3. Prediction Set*
+Finally, we use the conformity score and quantile function to construct the *prediction set*, which is the interval we provide for the new prediction.
+
+For a new input \( X_t \), the prediction set \( \hat{C}_t \) is defined as:
+\[
+\hat{C}_t = \{y : S(X_t, y) \leq Q(1 - \alpha)\}
+\]
+
+- Here, \( \alpha \) is the desired error rate (e.g., \( \alpha = 0.1 \) for 90% coverage).
+
+- The set contains all possible values \( y \) that have a conformity score \( S(X_t, y) \) below the threshold \( Q(1 - \alpha) \).
+
+*Why is this important?*  
+The prediction set provides a range of values that are most likely to include the true value \( Y_t \). This range is guaranteed to achieve the desired coverage level, assuming the data meets the exchangeability condition.
+
+---
+
+# Adaptive Conformal Inference (Section 2)
+
+Traditional conformal prediction methods assume that the data is *exchangeable, meaning that the order of the data points does not matter, and the distribution of the data remains constant over time. However, this assumption often fails in real-world applications, especially for **time series data* or other *non-stationary data* where the data distribution can shift significantly over time. 
+
+Adaptive Conformal Inference (ACI) addresses this challenge by dynamically recalibrating the *coverage parameter* \( \alpha_t \) as the data evolves. This makes ACI robust to changes in the data's distribution, ensuring that the prediction intervals maintain their validity over time.
+
+---
+
+## Key Concepts of Adaptive Conformal Inference
+
+### 1. *Miscoverage Rate*
+The *miscoverage rate* quantifies how often the true value \( Y_t \) falls outside the prediction set \( \hat{C}_t \). 
+
+For a given time step \( t \), the miscoverage rate \( M_t(\alpha) \) is defined as:
+\[
+M_t(\alpha) = P(S(X_t, Y_t) > Q_t(1 - \alpha))
+\]
+This expression states that the miscoverage rate is the probability that the conformity score \( S(X_t, Y_t) \) exceeds the threshold \( Q_t(1 - \alpha) \), where \( Q_t(1 - \alpha) \) is the quantile of the conformity scores determined from past data. 
+
+In practical terms:
+
+- If \( M_t(\alpha) \) is close to \( \alpha \), the prediction intervals are well-calibrated.
+
+- If \( M_t(\alpha) \) is far from \( \alpha \), the intervals are either too narrow (under-covering) or too wide (over-covering).
+
+---
+
+### 2. *Adaptive Update Rule*
+The core innovation of ACI is its *adaptive update rule*, which recalibrates the coverage parameter \( \alpha_t \) at each time step based on observed performance.
+
+The update rule is:
+\[
+\alpha_{t+1} = \alpha_t + \gamma (\alpha - \text{err}_t)
+\]
+
+#### *Explanation of the Terms*:
+1. *Current Parameter (\( \alpha_t \))*: The coverage parameter at time \( t \).
+2. *Step Size (\( \gamma \))*: A small, positive constant that controls how quickly the method adapts to changes in the data. Larger \( \gamma \) allows for faster adaptation but may introduce volatility, while smaller \( \gamma \) provides stability at the cost of slower adaptation.
+3. *Target Coverage (\( \alpha \))*: The desired miscoverage rate (e.g., \( \alpha = 0.1 \) for 90% coverage).
+4. *Error Term (\( \text{err}_t \))*:
+
+   - \( \text{err}_t = 1 \) if the true value \( Y_t \) is *outside* the prediction set \( \hat{C}_t \).
+   
+   - \( \text{err}_t = 0 \) if the true value \( Y_t \) is *inside* the prediction set \( \hat{C}_t \).
+
+This update rule works by:
+
+- *Increasing \( \alpha_t \)* if the prediction set has been under-covering (too narrow, too many \( \text{err}_t = 1 \)).
+
+- *Decreasing \( \alpha_t \)* if the prediction set has been over-covering (too wide, too few \( \text{err}_t = 1 \)).
+
+---
+
+### 3. *Objective of ACI*
+The primary objective of ACI is to ensure that the *coverage level* \( 1 - \alpha \) is maintained approximately over time, even as the data distribution shifts. By dynamically adjusting \( \alpha_t \), ACI can respond to non-stationarity in the data while maintaining reliable prediction intervals.
+
+---
+
+## ACI in Practice
+
+Here’s how ACI works step by step:
+1. *Compute the Conformity Score*:
+
+   - For each new data point \( X_t \), calculate the conformity score \( S(X_t, Y_t) \) for a candidate prediction \( Y_t \).
+   
+2. *Construct the Prediction Set*:
+
+   - Use the current \( \alpha_t \) to determine the prediction set:
+     \[
+     \hat{C}_t = \{ y : S(X_t, y) \leq Q_t(1 - \alpha_t) \}
+     \]
+     
+   - The set \( \hat{C}_t \) contains all values \( y \) that are considered reasonable predictions based on the conformity score and the threshold \( Q_t(1 - \alpha_t) \).
+
+3. *Evaluate Miscoverage*:
+
+   - Check whether the true value \( Y_t \) falls within the prediction set \( \hat{C}_t \):
+   
+     - If \( Y_t \notin \hat{C}_t \), record a miscoverage event (\( \text{err}_t = 1 \)).
+     
+     - Otherwise, record \( \text{err}_t = 0 \).
+
+4. *Update \( \alpha_t \)*:
+
+   - Apply the adaptive update rule to adjust \( \alpha_t \) based on recent performance.
+
+---
+
+## Why Is ACI Important?
+
+1. *Handles Non-Stationary Data*:
+
+   - Unlike traditional conformal methods, ACI is designed for data where the distribution can change over time, such as financial markets or environmental data.
+
+2. *Simple and Efficient*:
+
+   - The update rule is computationally lightweight and only requires tracking a single parameter (\( \alpha_t \)) over time.
+
+3. *Robust Prediction Intervals*:
+
+   - ACI ensures that the prediction intervals remain reliable even under significant distribution shifts, providing greater trust in the predictions.
+  
+---
+   
+## Point b: Implementation and Comparison of Strategies
+
+In this section, we applied and compared different conformal prediction strategies to quantify the prediction uncertainty of Apple stock volatility. Following the instructions in the assignment, we implemented the **Standard Conformal Prediction (CP)**, the **Adaptive Simple strategy** (based on Equation 2), and the **Momentum Adaptive strategy** (based on Equation 3) using both **GARCH(1,1)** and **Exponential GARCH (EGARCH)(1,1)** models. The main difference between EGARCH and GARCH models is that EGARCH accounts for asymmetries in volatility, allowing negative shocks to have a different impact on volatility compared to positive shocks, while GARCH assumes a symmetric response to all shocks.  
+
+
+### Methodology
+
+1. **Target Parameters**:
+
+   - The desired coverage level was set to \( 90\% \) (\( \alpha = 0.1 \)).
+   
+   - For the adaptive strategies:
+   
+     - The **Adaptive Simple strategy** and **Momentum Adaptive strategy** were initially tested with an adaptation rate \( \gamma = 0.05 \).
+
+2. **Conformity Scores**:
+
+   - For **Standard CP** and **Adaptive Simple**, we used both normalized and non-normalized conformity scores.
+   
+   - For **Momentum Adaptive**, only normalized conformity scores were used.
+
+3. **Data**:
+
+   - Apple stock data from 2015-01-01 to 2023-12-31 was used.
+   
+   - Both GARCH and Exponential GARCH models were fitted to the data to generate volatility forecasts.
+
+4. **Evaluation of Strategies**:
+
+   - Prediction intervals were constructed for each method, and **local coverage rates** were calculated to assess whether the observed volatility fell within the predicted intervals at the target \( 90\% \) level.
+   
+   - Additional plots were created to track the behavior of prediction errors over time, ensuring they converged to the expected \( 10\% \) miscoverage rate (\( \alpha = 0.1 \)).
+
+5. **Model Selection with \( \gamma = 0.05 \)**:
+
+   - For each strategy and model, the local coverage rates were compared against the target level. 
+   
+   - The best-performing model was selected by minimizing the sum of the absolute difference between the mean local coverage rate and the target, and the variance of the local coverage rates.
+
+6. **Testing Different Values of \( \gamma \)**:
+
+   - To evaluate the impact of the adaptation rate \( \gamma \), we repeated the analysis using \( \gamma = 0.03 \) and \( \gamma = 0.07 \), focusing only on the three best-performing strategies identified with \( \gamma = 0.05 \).
+   
+   - For each \( \gamma \), the local coverage rates and prediction errors were plotted, and the best-performing strategy was selected.
+   
+   - Finally, the best strategies for \( \gamma = 0.03 \), \( \gamma = 0.05 \), and \( \gamma = 0.07 \) were compared to determine the overall best-performing model and adaptation rate.
+
+### Objective
+
+The main objective of this analysis was to compare the coverage performance of the different strategies and evaluate how the adaptation rate \( \gamma \) affects the results. The final goal was to identify the strategy and model that consistently provide reliable prediction intervals at the target coverage level.
+
+---
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Load necessary libraries
+library(quantmod)
+library(quantreg)
+library(rugarch)
+library(dplyr)
+library(zoo)
+
+### Volatility prediction
+#Garch
+garchConformalForcasting <- function(returns, alpha = 0.1, gamma = 0.05, lookback = 1250, 
+                                     garchP = 1, garchQ = 1, startUp = 100, verbose = FALSE, 
+                                     updateMethod, momentumBW = 0.8, scoreType ) {
+  myT <- length(returns)
+  T0 <- max(startUp, lookback)
+  garchSpec <- ugarchspec(mean.model = list(armaOrder = c(0, 0), include.mean = FALSE), 
+                          variance.model = list(model = "sGARCH", garchOrder = c(garchP, garchQ)), 
+                          distribution.model = "norm")
+  alphat <- alpha
+  ### Initialize data storage variables
+  errSeqOC <- rep(0, myT - T0 + 1)
+  errSeqNC <- rep(0, myT - T0 + 1)
+  alphaSequence <- rep(alpha, myT - T0 + 1)
+  scores <- rep(0, myT - T0 + 1)
+  
+  for (t in T0:myT) {
+    if (verbose) {
+      print(t)
+    }
+    ### Fit GARCH model and compute new conformity score
+    garchFit <- ugarchfit(garchSpec, returns[(t - lookback + 1):(t - 1)], solver = "hybrid")
+    sigmaNext <- sigma(ugarchforecast(garchFit, n.ahead = 1))
+    if (scoreType == "Simple") {
+      scores[t - T0 + 1] <- abs(returns[t]^2 - sigmaNext^2)
+    } else {
+      scores[t - T0 + 1] <- abs(returns[t]^2 - sigmaNext^2) / sigmaNext^2
+    }
+    
+    recentScores <- scores[max(t - T0 + 1 - lookback + 1, 1):(t - T0)]
+    
+    ### Compute errt for both methods
+    errSeqOC[t - T0 + 1] <- as.numeric(scores[t - T0 + 1] > quantile(recentScores, probs = max(0, min(1, 1 - alphat))))
+    errSeqNC[t - T0 + 1] <- as.numeric(scores[t - T0 + 1] > quantile(recentScores, probs = max(0, min(1, 1 - alpha))))
+    
+    ### Update alphat
+    alphaSequence[t - T0 + 1] <- alphat
+    if (updateMethod == "Simple") {
+      alphat <- alphat + gamma * (alpha - errSeqOC[t - T0 + 1])
+    } else if (updateMethod == "Momentum") {
+      w <- rev(momentumBW^(1:(t - T0 + 1)))
+      w <- w / sum(w)
+      alphat <- alphat + gamma * (alpha - sum(errSeqOC[1:(t - T0 + 1)] * w))
+    }
+    if (t %% 100 == 0) {
+      print(sprintf("Done %g steps", t))
+    }
+  }
+  
+  return(list(alphaSequence = alphaSequence, errSeqOC = errSeqOC, errSeqNC = errSeqNC))
+}
+
+# Step 1: Get financial data
+getSymbols("AAPL", from = "2015-01-01", to = "2023-12-31")
+aapl_prices <- Cl(AAPL)
+returns <- dailyReturn(aapl_prices)
+returns <- na.omit(returns)
+
+results_Studentized <- garchConformalForcasting(returns = returns, alpha = 0.1, gamma = 0.05,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Simple", scoreType ="Studentized")
+results_Simple <- garchConformalForcasting(returns = returns, alpha = 0.1, gamma = 0.05,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Simple", scoreType ="Simple")
+
+date <- index(aapl_prices)[1250:length(index(aapl_prices))]
+alphaSequence_St <- results_Studentized[[1]]
+errSeqOC_St <- results_Studentized[[2]]; mean(errSeqOC_St)
+errSeqNC_St <- results_Studentized[[3]]; mean(errSeqNC_St)
+
+alphaSequence_Si <- results_Simple[[1]]
+errSeqOC_Si <- results_Simple[[2]]; mean(errSeqOC_Si)
+errSeqNC_Si <- results_Simple[[3]]; mean(errSeqNC_Si)
+
+results_StudentizedM <- garchConformalForcasting(returns = returns, alpha = 0.1, gamma = 0.05,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Momentum",scoreType ="Studentized")
+alphaSequence_StM <- results_StudentizedM[[1]]
+errSeqOC_StM <- results_StudentizedM[[2]]; mean(errSeqOC_StM)
+errSeqNC_StM <- results_StudentizedM[[3]]; mean(errSeqNC_StM)
+
+plot(date, cummean(errSeqNC_St), type = "l", col = "black", ylim = c(0, 0.5), 
+     main = "Error Rates: GARCH Strategies Studentized", xlab = "Date", ylab = "Cumulative Error Rate")
+lines(date, cummean(errSeqOC_St), col = "blue")
+lines(date, cummean(errSeqOC_StM), col = "red",type = "s")
+abline(h = 0.1, col = "green", lty = 2)
+legend("topright", legend = c("Standard CP", "Adaptive Simple", "Adaptive Momentum"), 
+       col = c("black", "blue", "red"), lty = 1)
+
+
+plot(date, cummean(errSeqNC_Si), type = "l", col = "black", ylim = c(0, 0.5), 
+     main = "Error Rates: GARCH Strategies Simple", xlab = "Date", ylab = "Cumulative Error Rate")
+lines(date, cummean(errSeqOC_Si), col = "blue")
+abline(h = 0.1, col = "green", lty = 2)
+legend("topright", legend = c("Standard CP", "Adaptive Simple"), 
+       col = c("black", "blue"), lty = 1)
+
+
+
+compute_local_coverage <- function(errors, window = 250) {
+  1 - rollmean(errors, k = window, fill = NA)
+}
+
+window_size <- 250
+
+# Generate Local Coverage Rates for Normalized and Non-Normalized Scores
+
+# Local Coverage for Scores Non-Normalized
+local_coverage_fixed_non_normalized <- compute_local_coverage(errSeqNC_Si, window = window_size)
+local_coverage_adaptive_simple_non_normalized <- compute_local_coverage(errSeqOC_Si, window = window_size)
+
+# Local Coverage for Scores Normalized
+local_coverage_fixed_normalized <- compute_local_coverage(errSeqNC_St, window = window_size)
+local_coverage_adaptive_simple_normalized <- compute_local_coverage(errSeqOC_St, window = window_size)
+local_coverage_adaptive_momentum <- compute_local_coverage(errSeqOC_StM, window = window_size)
+
+# Plot Local Coverage Rates for Non-Normalized Scores
+plot(date, local_coverage_adaptive_simple_non_normalized, type = "l", col = "blue", ylim = c(0.8, 1),
+     main = "GARCH Local Coverage Rates: Non-Normalized", xlab = "Date", ylab = "Local Coverage Level")
+lines(date, local_coverage_fixed_non_normalized, col = "red")
+abline(h = 0.9, col = "black", lty = 2)
+legend("bottomright", legend = c("Adaptive Simple", "Fixed Alpha"), 
+       col = c("blue", "red"), lty = 1)
+
+# Plot Local Coverage Rates for Normalized Scores
+plot(date, local_coverage_adaptive_simple_normalized, type = "l", col = "blue", ylim = c(0.8, 1),
+     main = "GARCH Local Coverage Rates: Normalized", xlab = "Date", ylab = "Local Coverage Level")
+lines(date, local_coverage_fixed_normalized, col = "red")
+lines(date, local_coverage_adaptive_momentum, col = "green", type="s")
+abline(h = 0.9, col = "black", lty = 2)  # Target coverage level
+legend("bottomright", legend = c("Adaptive Simple", "Fixed Alpha", "Adaptive Momentum"), 
+       col = c("blue", "red", "green"), lty = 1)
+```
+
+### Results: Error Rates (Studentized)
+
+For the studentized conformity scores, we observe that both the **Adaptive Simple** and **Adaptive Momentum** strategies closely approach the target error rate (\( \alpha = 0.1 \)), while the **Standard CP** shows a greater distance from the target. Additionally, we can see that the performance of Adaptive Simple and Adaptive Momentum is nearly identical, with both strategies achieving very similar results.
+
+---
+
+### Results: Error Rates (Non-Normalized)
+
+When using non-normalized conformity scores, there is a noticeable difference between the **Adaptive Simple** strategy and **Standard CP**. The Adaptive Simple strategy demonstrates a much better convergence toward the target error rate, while the Standard CP remains further from the target throughout the evaluation period.
+
+---
+
+### Results: Local Coverage Rates (Non-Normalized)
+
+For non-normalized conformity scores, we observe a clear graphical difference between the **Adaptive Simple** and **Standard CP** strategies. While both strategies oscillate around the target coverage level (\( 90\% \)), the Standard CP tends to remain significantly higher than the target, whereas the Adaptive Simple strategy consistently converges more closely to the target.
+
+---
+
+### Results: Local Coverage Rates (Normalized)
+
+For normalized conformity scores, the difference between strategies becomes even more pronounced. The **Standard CP** remains above the target coverage level for almost the entire evaluation period, failing to reach the desired level. In contrast, both the **Adaptive Simple** and **Adaptive Momentum** strategies achieve excellent performance, closely fluctuating around the target coverage level and showing very similar results overall.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+### eGARCH
+EgarchConformalForcasting <- function(returns, alpha = 0.1, gamma = 0.05, lookback = 1250, 
+                                      garchP = 1, garchQ = 1, startUp = 100, verbose = FALSE, 
+                                      updateMethod, momentumBW = 0.8, scoreType ) {
+  myT <- length(returns)
+  T0 <- max(startUp, lookback)
+  
+  # Updated to eGARCH specification
+  garchSpec <- ugarchspec(mean.model = list(armaOrder = c(0, 0), include.mean = FALSE), 
+                          variance.model = list(model = "eGARCH", garchOrder = c(garchP, garchQ)), 
+                          distribution.model = "norm")
+  
+  alphat <- alpha
+  errSeqOC <- rep(0, myT - T0 + 1)
+  errSeqNC <- rep(0, myT - T0 + 1)
+  alphaSequence <- rep(alpha, myT - T0 + 1)
+  scores <- rep(0, myT - T0 + 1)
+  
+  for (t in T0:myT) {
+    if (verbose) {
+      print(t)
+    }
+    # Fit eGARCH model and compute conformity score
+    garchFit <- ugarchfit(garchSpec, returns[(t - lookback + 1):(t - 1)], solver = "hybrid")
+    sigmaNext <- sigma(ugarchforecast(garchFit, n.ahead = 1))
+    
+    if (scoreType == "Simple") {
+      scores[t - T0 + 1] <- abs(returns[t]^2 - sigmaNext^2)
+    } else {
+      scores[t - T0 + 1] <- abs(returns[t]^2 - sigmaNext^2) / sigmaNext^2
+    }
+    
+    recentScores <- scores[max(t - T0 + 1 - lookback + 1, 1):(t - T0)]
+    errSeqOC[t - T0 + 1] <- as.numeric(scores[t - T0 + 1] > quantile(recentScores, probs = max(0, min(1, 1 - alphat))))
+    errSeqNC[t - T0 + 1] <- as.numeric(scores[t - T0 + 1] > quantile(recentScores, probs = max(0, min(1, 1 - alpha))))
+    
+    alphaSequence[t - T0 + 1] <- alphat
+    if (updateMethod == "Simple") {
+      alphat <- alphat + gamma * (alpha - errSeqOC[t - T0 + 1])
+    } else if (updateMethod == "Momentum") {
+      w <- rev(momentumBW^(1:(t - T0 + 1)))
+      w <- w / sum(w)
+      alphat <- alphat + gamma * (alpha - sum(errSeqOC[1:(t - T0 + 1)] * w))
+    }
+    if (t %% 100 == 0) {
+      print(sprintf("Done %g steps", t))
+    }
+  }
+  
+  return(list(alphaSequence = alphaSequence, errSeqOC = errSeqOC, errSeqNC = errSeqNC))
+}
+
+results_EStudentized <- EgarchConformalForcasting(returns = returns, alpha = 0.1, gamma = 0.05,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Simple", scoreType ="Studentized")
+results_ESimple <- EgarchConformalForcasting(returns = returns, alpha = 0.1, gamma = 0.05,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Simple", scoreType ="Simple")
+
+date <- index(aapl_prices)[1250:length(index(aapl_prices))]
+alphaSequence_ESt <- results_EStudentized[[1]]
+errSeqOC_ESt <- results_EStudentized[[2]]; mean(errSeqOC_ESt)
+errSeqNC_ESt <- results_EStudentized[[3]]; mean(errSeqNC_ESt)
+
+alphaSequence_ESi <- results_ESimple[[1]]
+errSeqOC_ESi <- results_ESimple[[2]]; mean(errSeqOC_ESi)
+errSeqNC_ESi <- results_ESimple[[3]]; mean(errSeqNC_ESi)
+
+results_EStudentizedM <- EgarchConformalForcasting(returns = returns, alpha = 0.1, gamma = 0.05,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Momentum",scoreType ="Studentized")
+alphaSequence_EStM <- results_EStudentizedM[[1]]
+errSeqOC_EStM <- results_EStudentizedM[[2]]; mean(errSeqOC_EStM)
+errSeqNC_EStM <- results_EStudentizedM[[3]]; mean(errSeqNC_EStM)
+
+plot(date, cummean(errSeqNC_ESt), type = "l", col = "black", ylim = c(0, 0.5), 
+     main = "Error Rates: eGARCH Strategies Studentized", xlab = "Date", ylab = "Cumulative Error Rate")
+lines(date, cummean(errSeqOC_ESt), col = "blue")
+lines(date, cummean(errSeqOC_EStM), col = "red",type = "s")
+abline(h = 0.1, col = "green", lty = 2)
+legend("topright", legend = c("Standard CP", "Adaptive Simple", "Adaptive Momentum"), 
+       col = c("black", "blue", "red"), lty = 1)
+
+
+plot(date, cummean(errSeqNC_ESi), type = "l", col = "black", ylim = c(0, 0.5), 
+     main = "Error Rates: eGARCH Strategies Simple", xlab = "Date", ylab = "Cumulative Error Rate")
+lines(date, cummean(errSeqOC_ESi), col = "blue")
+abline(h = 0.1, col = "green", lty = 2)
+legend("topright", legend = c("Standard CP", "Adaptive Simple"), 
+       col = c("black", "blue"), lty = 1)
+
+
+
+compute_local_coverage <- function(errors, window = 250) {
+  1 - rollmean(errors, k = window, fill = NA)
+}
+
+window_size <- 250
+# Generate Local Coverage Rates for Normalized and Non-Normalized Scores
+
+# Local Coverage for Scores Non-Normalized (eGARCH)
+local_coverage_Efixed_non_normalized <- compute_local_coverage(errSeqNC_ESi, window = window_size)
+local_coverage_adaptive_Esimple_non_normalized <- compute_local_coverage(errSeqOC_ESi, window = window_size)
+
+# Local Coverage for Scores Normalized (eGARCH)
+local_coverage_Efixed_normalized <- compute_local_coverage(errSeqNC_ESt, window = window_size)
+local_coverage_adaptive_Esimple_normalized <- compute_local_coverage(errSeqOC_ESt, window = window_size)
+local_coverage_adaptive_Emomentum <- compute_local_coverage(errSeqOC_EStM, window = window_size)
+
+# Plot Local Coverage Rates for Non-Normalized Scores (eGARCH)
+plot(date, local_coverage_adaptive_Esimple_non_normalized, type = "l", col = "blue", ylim = c(0.8, 1),
+     main = "eGARCH Local Coverage Rates: Non-Normalized", xlab = "Date", ylab = "Local Coverage Level")
+lines(date, local_coverage_Efixed_non_normalized, col = "red")
+abline(h = 0.9, col = "black", lty = 2)
+legend("bottomright", legend = c("Adaptive Simple", "Fixed Alpha"), 
+       col = c("blue", "red"), lty = 1)
+
+# Plot Local Coverage Rates for Normalized Scores (eGARCH)
+plot(date, local_coverage_adaptive_Esimple_normalized, type = "l", col = "blue", ylim = c(0.8, 1),
+     main = "eGARCH Local Coverage Rates: Normalized", xlab = "Date", ylab = "Local Coverage Level")
+lines(date, local_coverage_Efixed_normalized, col = "red")
+lines(date, local_coverage_adaptive_Emomentum, col = "green", type="s")
+abline(h = 0.9, col = "black", lty = 2)  # Target coverage level
+legend("bottomright", legend = c("Adaptive Simple", "Fixed Alpha", "Adaptive Momentum"), 
+       col = c("blue", "red", "green"), lty = 1)
+```
+
+### Results: Error Rates (Studentized)
+
+For the studentized conformity scores using the eGARCH model, the results are very similar to those observed for GARCH. Both the **Adaptive Simple** and **Adaptive Momentum** strategies perform well, closely approaching the target error rate (\( \alpha = 0.1 \)). The **Standard CP**, on the other hand, shows a greater distance from the target throughout the period. Additionally, the Adaptive Simple and Adaptive Momentum strategies once again exhibit almost identical performance.
+
+---
+
+### Results: Error Rates (Non-Normalized)
+
+For non-normalized conformity scores, the difference between **Adaptive Simple** and **Standard CP** is consistent with what was observed for GARCH. The Adaptive Simple strategy demonstrates significantly better convergence toward the target error rate, while the Standard CP remains farther from the target over time.
+
+---
+
+### Results: Local Coverage Rates (Non-Normalized)
+
+The local coverage rates for non-normalized conformity scores using the eGARCH model confirm the same pattern observed with GARCH. The **Adaptive Simple** strategy oscillates around the target level (\( 90\% \)) but converges more closely to it compared to the **Standard CP**, which remains consistently higher than the target.
+
+---
+
+### Results: Local Coverage Rates (Normalized)
+
+With normalized conformity scores, the difference between strategies becomes more evident, mirroring the results of GARCH. The **Standard CP** strategy fails to achieve the target coverage level, remaining above it for most of the period. In contrast, both the **Adaptive Simple** and **Adaptive Momentum** strategies show excellent performance, closely fluctuating around the target and demonstrating nearly identical results.
+
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Compare and Select the Best Models
+model_means <- list(
+  # Standard CP
+  Standard_CP_GARCH_NonNormalized = mean(local_coverage_fixed_non_normalized, na.rm = TRUE),
+  Standard_CP_eGARCH_NonNormalized = mean(local_coverage_Efixed_non_normalized, na.rm = TRUE),
+  Standard_CP_GARCH_Normalized = mean(local_coverage_fixed_normalized, na.rm = TRUE),
+  Standard_CP_eGARCH_Normalized = mean(local_coverage_Efixed_normalized, na.rm = TRUE),
+  
+  # Adaptive Simple
+  Adaptive_Simple_GARCH_NonNormalized = mean(local_coverage_adaptive_simple_non_normalized, na.rm = TRUE),
+  Adaptive_Simple_eGARCH_NonNormalized = mean(local_coverage_adaptive_Esimple_non_normalized, na.rm = TRUE),
+  Adaptive_Simple_GARCH_Normalized = mean(local_coverage_adaptive_simple_normalized, na.rm = TRUE),
+  Adaptive_Simple_eGARCH_Normalized = mean(local_coverage_adaptive_Esimple_normalized, na.rm = TRUE),
+  
+  # Adaptive Momentum
+  Adaptive_Momentum_GARCH = mean(local_coverage_adaptive_momentum, na.rm = TRUE),
+  Adaptive_Momentum_eGARCH = mean(local_coverage_adaptive_Emomentum, na.rm = TRUE)
+)
+
+# Compare models using both mean and variance of local coverage rates
+model_variances <- list(
+  # Standard CP
+  Standard_CP_GARCH_NonNormalized = var(local_coverage_fixed_non_normalized, na.rm = TRUE),
+  Standard_CP_eGARCH_NonNormalized = var(local_coverage_Efixed_non_normalized, na.rm = TRUE),
+  Standard_CP_GARCH_Normalized = var(local_coverage_fixed_normalized, na.rm = TRUE),
+  Standard_CP_eGARCH_Normalized = var(local_coverage_Efixed_normalized, na.rm = TRUE),
+  
+  # Adaptive Simple
+  Adaptive_Simple_GARCH_NonNormalized = var(local_coverage_adaptive_simple_non_normalized, na.rm = TRUE),
+  Adaptive_Simple_eGARCH_NonNormalized = var(local_coverage_adaptive_Esimple_non_normalized, na.rm = TRUE),
+  Adaptive_Simple_GARCH_Normalized = var(local_coverage_adaptive_simple_normalized, na.rm = TRUE),
+  Adaptive_Simple_eGARCH_Normalized = var(local_coverage_adaptive_Esimple_normalized, na.rm = TRUE),
+  
+  # Adaptive Momentum
+  Adaptive_Momentum_GARCH = var(local_coverage_adaptive_momentum, na.rm = TRUE),
+  Adaptive_Momentum_eGARCH = var(local_coverage_adaptive_Emomentum, na.rm = TRUE)
+)
+
+# Step 1: Best Model for Standard CP
+standard_models <- c("Standard_CP_GARCH_NonNormalized", "Standard_CP_eGARCH_NonNormalized", 
+                     "Standard_CP_GARCH_Normalized", "Standard_CP_eGARCH_Normalized")
+standard_best <- standard_models[which.min(abs(unlist(model_means[standard_models]) - 0.9) + 
+                                             unlist(model_variances[standard_models]))]
+
+# Step 2: Best Model for Adaptive Simple
+adaptive_simple_models <- c("Adaptive_Simple_GARCH_NonNormalized", "Adaptive_Simple_eGARCH_NonNormalized", 
+                            "Adaptive_Simple_GARCH_Normalized", "Adaptive_Simple_eGARCH_Normalized")
+adaptive_simple_best <- adaptive_simple_models[which.min(abs(unlist(model_means[adaptive_simple_models]) - 0.9) + 
+                                                           unlist(model_variances[adaptive_simple_models]))]
+
+# Step 3: Best Model for Adaptive Momentum
+adaptive_momentum_models <- c("Adaptive_Momentum_GARCH", "Adaptive_Momentum_eGARCH")
+adaptive_momentum_best <- adaptive_momentum_models[which.min(abs(unlist(model_means[adaptive_momentum_models]) - 0.9) + 
+                                                               unlist(model_variances[adaptive_momentum_models]))]
+
+# Step 4: Compare the Best Models from Each Category
+final_models <- c(standard_best, adaptive_simple_best, adaptive_momentum_best)
+final_best <- final_models[which.min(abs(unlist(model_means[final_models]) - 0.9) + 
+                                       unlist(model_variances[final_models]))]
+
+# Print Results
+cat("Best model for Standard CP:", standard_best, "with mean:", model_means[[standard_best]], ", variance:", model_variances[[standard_best]], "\n")
+cat("Best model for Adaptive Simple:", adaptive_simple_best, "with mean:", model_means[[adaptive_simple_best]], ", variance:", model_variances[[adaptive_simple_best]], "\n")
+cat("Best model for Adaptive Momentum:", adaptive_momentum_best, "with mean:", model_means[[adaptive_momentum_best]], ", variance:", model_variances[[adaptive_momentum_best]], "\n")
+cat("Best overall model for Gamma = 0.05:", final_best, "with mean:", model_means[[final_best]], ", variance:", model_variances[[final_best]], "\n")
+```
+
+### Results for Gamma = 0.05
+
+For \( \gamma = 0.05 \), the best-performing models for each strategy were identified based on the smallest absolute difference between the mean local coverage rate and the target (\( 0.9 \)), combined with the lowest variance. 
+
+Among the selected models, the **Adaptive Momentum EGARCH** strategy emerged as the best overall performer.
+
+---
+
+### Next Steps
+
+We will now evaluate the performance of the strategies for other values of \( \gamma \), specifically \( \gamma = 0.03 \) and \( \gamma = 0.07 \), to assess how the adaptation rate impacts the results and identify the optimal \( \gamma \) value.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Analyze the impact of different gamma values on model selection
+
+### Volatility prediction GAMMA= 0.03
+# GARCH
+GarchConformalForcasting_003 <- function(returns, alpha = 0.1, gamma = 0.03, lookback = 1250, 
+                                         garchP = 1, garchQ = 1, startUp = 100, verbose = FALSE, 
+                                         updateMethod, momentumBW = 0.8, scoreType ) {
+  myT <- length(returns)
+  T0 <- max(startUp, lookback)
+  garchSpec <- ugarchspec(mean.model = list(armaOrder = c(0, 0), include.mean = FALSE), 
+                          variance.model = list(model = "sGARCH", garchOrder = c(garchP, garchQ)), 
+                          distribution.model = "norm")
+  alphat <- alpha
+  ### Initialize data storage variables
+  errSeqOC <- rep(0, myT - T0 + 1)
+  errSeqNC <- rep(0, myT - T0 + 1)
+  alphaSequence <- rep(alpha, myT - T0 + 1)
+  scores <- rep(0, myT - T0 + 1)
+  
+  for (t in T0:myT) {
+    if (verbose) {
+      print(t)
+    }
+    ### Fit GARCH model and compute new conformity score
+    garchFit <- ugarchfit(garchSpec, returns[(t - lookback + 1):(t - 1)], solver = "hybrid")
+    sigmaNext <- sigma(ugarchforecast(garchFit, n.ahead = 1))
+    if (scoreType == "Simple") {
+      scores[t - T0 + 1] <- abs(returns[t]^2 - sigmaNext^2)
+    } else {
+      scores[t - T0 + 1] <- abs(returns[t]^2 - sigmaNext^2) / sigmaNext^2
+    }
+    
+    recentScores <- scores[max(t - T0 + 1 - lookback + 1, 1):(t - T0)]
+    
+    ### Compute errt for both methods
+    errSeqOC[t - T0 + 1] <- as.numeric(scores[t - T0 + 1] > quantile(recentScores, probs = max(0, min(1, 1 - alphat))))
+    errSeqNC[t - T0 + 1] <- as.numeric(scores[t - T0 + 1] > quantile(recentScores, probs = max(0, min(1, 1 - alpha))))
+    
+    ### Update alphat
+    alphaSequence[t - T0 + 1] <- alphat
+    if (updateMethod == "Simple") {
+      alphat <- alphat + gamma * (alpha - errSeqOC[t - T0 + 1])
+    } else if (updateMethod == "Momentum") {
+      w <- rev(momentumBW^(1:(t - T0 + 1)))
+      w <- w / sum(w)
+      alphat <- alphat + gamma * (alpha - sum(errSeqOC[1:(t - T0 + 1)] * w))
+    }
+    if (t %% 100 == 0) {
+      print(sprintf("Done %g steps", t))
+    }
+  }
+  
+  return(list(alphaSequence = alphaSequence, errSeqOC = errSeqOC, errSeqNC = errSeqNC))
+}
+
+results_Studentized_003 <- GarchConformalForcasting_003(returns = returns, alpha = 0.1, gamma = 0.03,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Simple", scoreType ="Studentized")
+results_Simple_003 <- GarchConformalForcasting_003(returns = returns, alpha = 0.1, gamma = 0.03,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Simple", scoreType ="Simple")
+
+date_003 <- index(aapl_prices)[1250:length(index(aapl_prices))]
+alphaSequence_St_003 <- results_Studentized_003[[1]]
+errSeqOC_St_003 <- results_Studentized_003[[2]]; mean(errSeqOC_St_003)
+errSeqNC_St_003 <- results_Studentized_003[[3]]; mean(errSeqNC_St_003)
+
+alphaSequence_Si_003 <- results_Simple_003[[1]]
+errSeqOC_Si_003 <- results_Simple_003[[2]]; mean(errSeqOC_Si_003)
+errSeqNC_Si_003 <- results_Simple_003[[3]]; mean(errSeqNC_Si_003)
+
+results_StudentizedM_003 <- GarchConformalForcasting_003(returns = returns, alpha = 0.1, gamma = 0.03,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Momentum",scoreType ="Studentized")
+alphaSequence_StM_003 <- results_StudentizedM_003[[1]]
+errSeqOC_StM_003 <- results_StudentizedM_003[[2]]; mean(errSeqOC_StM_003)
+errSeqNC_StM_003 <- results_StudentizedM_003[[3]]; mean(errSeqNC_StM_003)
+
+plot(date_003, cummean(errSeqNC_St_003), type = "l", col = "black", ylim = c(0, 0.5), 
+     main = "Error Rates: GARCH Strategies Studentized (gamma = 0.03)", xlab = "Date", ylab = "Cumulative Error Rate")
+lines(date_003, cummean(errSeqOC_St_003), col = "blue")
+lines(date_003, cummean(errSeqOC_StM_003), col = "red",type = "s")
+abline(h = 0.1, col = "green", lty = 2)
+legend("topright", legend = c("Standard CP", "Adaptive Simple", "Adaptive Momentum"), 
+       col = c("black", "blue", "red"), lty = 1)
+
+
+plot(date_003, cummean(errSeqNC_Si_003), type = "l", col = "black", ylim = c(0, 0.5), 
+     main = "Error Rates: GARCH Strategies Simple (gamma = 0.03)", xlab = "Date", ylab = "Cumulative Error Rate")
+lines(date_003, cummean(errSeqOC_Si_003), col = "blue")
+abline(h = 0.1, col = "green", lty = 2)
+legend("topright", legend = c("Standard CP", "Adaptive Simple"), 
+       col = c("black", "blue"), lty = 1)
+
+
+compute_local_coverage <- function(errors, window = 250) {
+  1 - rollmean(errors, k = window, fill = NA)
+}
+
+window_size <- 250
+
+# Generate Local Coverage Rates for Normalized and Non-Normalized Scores
+
+# Local Coverage for Scores Non-Normalized
+local_coverage_fixed_non_normalized_003 <- compute_local_coverage(errSeqNC_Si_003, window = window_size)
+local_coverage_adaptive_simple_non_normalized_003 <- compute_local_coverage(errSeqOC_Si_003, window = window_size)
+
+# Local Coverage for Scores Normalized
+local_coverage_fixed_normalized_003 <- compute_local_coverage(errSeqNC_St_003, window = window_size)
+local_coverage_adaptive_simple_normalized_003 <- compute_local_coverage(errSeqOC_St_003, window = window_size)
+local_coverage_adaptive_momentum_003 <- compute_local_coverage(errSeqOC_StM_003, window = window_size)
+
+# Plot Local Coverage Rates for Non-Normalized Scores
+plot(date_003, local_coverage_adaptive_simple_non_normalized_003, type = "l", col = "blue", ylim = c(0.8, 1),
+     main = "GARCH Local Coverage Rates: Non-Normalized (gamma = 0.03)", xlab = "Date", ylab = "Local Coverage Level")
+lines(date_003, local_coverage_fixed_non_normalized_003, col = "red")
+abline(h = 0.9, col = "black", lty = 2)
+legend("bottomright", legend = c("Adaptive Simple", "Fixed Alpha"), 
+       col = c("blue", "red"), lty = 1)
+
+# Plot Local Coverage Rates for Normalized Scores
+plot(date_003, local_coverage_adaptive_simple_normalized_003, type = "l", col = "blue", ylim = c(0.8, 1),
+     main = "GARCH Local Coverage Rates: Normalized (gamma = 0.03)", xlab = "Date", ylab = "Local Coverage Level")
+lines(date_003, local_coverage_fixed_normalized_003, col = "red")
+lines(date_003, local_coverage_adaptive_momentum_003, col = "green", type="s")
+abline(h = 0.9, col = "black", lty = 2)  # Target coverage level
+legend("bottomright", legend = c("Adaptive Simple", "Fixed Alpha", "Adaptive Momentum"), 
+       col = c("blue", "red", "green"), lty = 1)
+```
+
+### Results for GARCH with Gamma = 0.03
+
+#### Error Rates: Studentized
+For studentized conformity scores, the **Adaptive Simple** and **Adaptive Momentum** strategies using the GARCH model closely approach the target error rate (\( \alpha = 0.1 \)), with nearly identical performance. The **Standard CP** strategy, as observed previously, remains farther from the target throughout the period.
+
+---
+
+#### Error Rates: Non-Normalized
+For non-normalized conformity scores, the **Adaptive Simple** strategy demonstrates significant improvement in convergence to the target error rate compared to the **Standard CP**, which performs worse consistently.
+
+---
+
+#### Local Coverage Rates: Non-Normalized
+The local coverage rates for non-normalized conformity scores show a similar pattern to the previous cases. However, compared to \( \gamma = 0.05 \), both strategies deviate more noticeably from the target level (\( 90\% \)). The **Standard CP** remains significantly above the target, while the **Adaptive Simple** performs better but shows less alignment to the target compared to \( \gamma = 0.05 \).
+
+---
+
+#### Local Coverage Rates: Normalized
+For normalized conformity scores, the **Adaptive Simple** and **Adaptive Momentum** strategies using GARCH exhibit nearly identical behavior, oscillating closely around the target level (\( 90\% \)). However, both strategies appear to deviate slightly more from the target compared to the results for \( \gamma = 0.05 \). The **Standard CP** strategy remains consistently above the target.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+### Volatility prediction GAMMA=0.03
+# eGARCH
+EgarchConformalForcasting_003 <- function(returns, alpha = 0.1, gamma = 0.03, lookback = 1250, 
+                                          garchP = 1, garchQ = 1, startUp = 100, verbose = FALSE, 
+                                          updateMethod, momentumBW = 0.8, scoreType ) {
+  myT <- length(returns)
+  T0 <- max(startUp, lookback)
+  
+  # Updated to eGARCH specification
+  garchSpec <- ugarchspec(mean.model = list(armaOrder = c(0, 0), include.mean = FALSE), 
+                          variance.model = list(model = "eGARCH", garchOrder = c(garchP, garchQ)), 
+                          distribution.model = "norm")
+  
+  alphat <- alpha
+  errSeqOC <- rep(0, myT - T0 + 1)
+  errSeqNC <- rep(0, myT - T0 + 1)
+  alphaSequence <- rep(alpha, myT - T0 + 1)
+  scores <- rep(0, myT - T0 + 1)
+  
+  for (t in T0:myT) {
+    if (verbose) {
+      print(t)
+    }
+    # Fit eGARCH model and compute conformity score
+    garchFit <- ugarchfit(garchSpec, returns[(t - lookback + 1):(t - 1)], solver = "hybrid")
+    sigmaNext <- sigma(ugarchforecast(garchFit, n.ahead = 1))
+    
+    if (scoreType == "Simple") {
+      scores[t - T0 + 1] <- abs(returns[t]^2 - sigmaNext^2)
+    } else {
+      scores[t - T0 + 1] <- abs(returns[t]^2 - sigmaNext^2) / sigmaNext^2
+    }
+    
+    recentScores <- scores[max(t - T0 + 1 - lookback + 1, 1):(t - T0)]
+    errSeqOC[t - T0 + 1] <- as.numeric(scores[t - T0 + 1] > quantile(recentScores, probs = max(0, min(1, 1 - alphat))))
+    errSeqNC[t - T0 + 1] <- as.numeric(scores[t - T0 + 1] > quantile(recentScores, probs = max(0, min(1, 1 - alpha))))
+    
+    alphaSequence[t - T0 + 1] <- alphat
+    if (updateMethod == "Simple") {
+      alphat <- alphat + gamma * (alpha - errSeqOC[t - T0 + 1])
+    } else if (updateMethod == "Momentum") {
+      w <- rev(momentumBW^(1:(t - T0 + 1)))
+      w <- w / sum(w)
+      alphat <- alphat + gamma * (alpha - sum(errSeqOC[1:(t - T0 + 1)] * w))
+    }
+    if (t %% 100 == 0) {
+      print(sprintf("Done %g steps", t))
+    }
+  }
+  
+  return(list(alphaSequence = alphaSequence, errSeqOC = errSeqOC, errSeqNC = errSeqNC))
+}
+
+results_EStudentized_003 <- EgarchConformalForcasting_003(returns = returns, alpha = 0.1, gamma = 0.03,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Simple", scoreType ="Studentized")
+results_ESimple_003 <- EgarchConformalForcasting_003(returns = returns, alpha = 0.1, gamma = 0.03,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Simple", scoreType ="Simple")
+
+date_003 <- index(aapl_prices)[1250:length(index(aapl_prices))]
+alphaSequence_ESt_003 <- results_EStudentized_003[[1]]
+errSeqOC_ESt_003 <- results_EStudentized_003[[2]]; mean(errSeqOC_ESt_003)
+errSeqNC_ESt_003 <- results_EStudentized_003[[3]]; mean(errSeqNC_ESt_003)
+
+alphaSequence_ESi_003 <- results_ESimple_003[[1]]
+errSeqOC_ESi_003 <- results_ESimple_003[[2]]; mean(errSeqOC_ESi_003)
+errSeqNC_ESi_003 <- results_ESimple_003[[3]]; mean(errSeqNC_ESi_003)
+
+results_EStudentizedM_003 <- EgarchConformalForcasting_003(returns = returns, alpha = 0.1, gamma = 0.03,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Momentum",scoreType ="Studentized")
+alphaSequence_EStM_003 <- results_EStudentizedM_003[[1]]
+errSeqOC_EStM_003 <- results_EStudentizedM_003[[2]]; mean(errSeqOC_EStM_003)
+errSeqNC_EStM_003 <- results_EStudentizedM_003[[3]]; mean(errSeqNC_EStM_003)
+
+plot(date_003, cummean(errSeqNC_ESt_003), type = "l", col = "black", ylim = c(0, 0.5), 
+     main = "Error Rates: eGARCH Strategies Studentized (gamma = 0.03)", xlab = "Date", ylab = "Cumulative Error Rate")
+lines(date_003, cummean(errSeqOC_ESt_003), col = "blue")
+lines(date_003, cummean(errSeqOC_EStM_003), col = "red",type = "s")
+abline(h = 0.1, col = "green", lty = 2)
+legend("topright", legend = c("Standard CP", "Adaptive Simple", "Adaptive Momentum"), 
+       col = c("black", "blue", "red"), lty = 1)
+
+
+plot(date_003, cummean(errSeqNC_ESi_003), type = "l", col = "black", ylim = c(0, 0.5), 
+     main = "Error Rates: eGARCH Strategies Simple (gamma = 0.03)", xlab = "Date", ylab = "Cumulative Error Rate")
+lines(date_003, cummean(errSeqOC_ESi_003), col = "blue")
+abline(h = 0.1, col = "green", lty = 2)
+legend("topright", legend = c("Standard CP", "Adaptive Simple"), 
+       col = c("black", "blue"), lty = 1)
+
+
+compute_local_coverage <- function(errors, window = 250) {
+  1 - rollmean(errors, k = window, fill = NA)
+}
+
+window_size <- 250
+# Generate Local Coverage Rates for Normalized and Non-Normalized Scores
+
+# Local Coverage for Scores Non-Normalized (eGARCH)
+local_coverage_Efixed_non_normalized_003 <- compute_local_coverage(errSeqNC_ESi_003, window = window_size)
+local_coverage_adaptive_Esimple_non_normalized_003 <- compute_local_coverage(errSeqOC_ESi_003, window = window_size)
+
+# Local Coverage for Scores Normalized (eGARCH)
+local_coverage_Efixed_normalized_003 <- compute_local_coverage(errSeqNC_ESt_003, window = window_size)
+local_coverage_adaptive_Esimple_normalized_003 <- compute_local_coverage(errSeqOC_ESt_003, window = window_size)
+local_coverage_adaptive_Emomentum_003 <- compute_local_coverage(errSeqOC_EStM_003, window = window_size)
+
+# Plot Local Coverage Rates for Non-Normalized Scores (eGARCH)
+plot(date_003, local_coverage_adaptive_Esimple_non_normalized_003, type = "l", col = "blue", ylim = c(0.8, 1),
+     main = "eGARCH Local Coverage Rates: Non-Normalized (gamma = 0.03)", xlab = "Date", ylab = "Local Coverage Level")
+lines(date_003, local_coverage_Efixed_non_normalized_003, col = "red")
+abline(h = 0.9, col = "black", lty = 2)
+legend("bottomright", legend = c("Adaptive Simple", "Fixed Alpha"), 
+       col = c("blue", "red"), lty = 1)
+
+# Plot Local Coverage Rates for Normalized Scores (eGARCH)
+plot(date_003, local_coverage_adaptive_Esimple_normalized_003, type = "l", col = "blue", ylim = c(0.8, 1),
+     main = "eGARCH Local Coverage Rates: Normalized (gamma = 0.03)", xlab = "Date", ylab = "Local Coverage Level")
+lines(date_003, local_coverage_Efixed_normalized_003, col = "red")
+lines(date_003, local_coverage_adaptive_Emomentum_003, col = "green", type="s")
+abline(h = 0.9, col = "black", lty = 2)  # Target coverage level
+legend("bottomright", legend = c("Adaptive Simple", "Fixed Alpha", "Adaptive Momentum"), 
+       col = c("blue", "red", "green"), lty = 1)
+```
+
+### Results for eGARCH with Gamma = 0.03
+
+#### Error Rates: Studentized
+For studentized conformity scores, the results obtained with the eGARCH model are very similar to those observed for GARCH. Both the **Adaptive Simple** and **Adaptive Momentum** strategies closely approach the target error rate (\( \alpha = 0.1 \)), while the **Standard CP** strategy remains farther from the target throughout the period.
+
+---
+
+#### Error Rates: Non-Normalized
+For non-normalized conformity scores, the **Adaptive Simple** strategy with eGARCH also demonstrates better convergence to the target error rate compared to the **Standard CP**, which performs worse consistently.
+
+---
+
+#### Local Coverage Rates: Non-Normalized
+The local coverage rates for non-normalized conformity scores using eGARCH follow a similar pattern to those observed with GARCH. Compared to \( \gamma = 0.05 \), both the **Adaptive Simple** and **Standard CP** strategies deviate more noticeably from the target level (\( 90\% \)). The **Standard CP** remains significantly above the target, while the **Adaptive Simple** performs better but is slightly less aligned to the target compared to \( \gamma = 0.05 \).
+
+---
+
+#### Local Coverage Rates: Normalized
+For normalized conformity scores, the **Adaptive Simple** and **Adaptive Momentum** strategies using eGARCH show nearly identical performance, oscillating closely around the target level (\( 90\% \)). However, both strategies deviate slightly more from the target compared to \( \gamma = 0.05 \). The **Standard CP** strategy remains consistently above the target.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Compare and Select the Best Models for Gamma = 0.03
+model_means_003 <- list(
+  # Standard CP
+  Standard_CP_GARCH_Normalized = mean(local_coverage_fixed_normalized_003, na.rm = TRUE),
+  
+  # Adaptive Simple
+  Adaptive_Simple_GARCH_Normalized = mean(local_coverage_adaptive_simple_normalized_003, na.rm = TRUE),
+  
+  # Adaptive Momentum
+  Adaptive_Momentum_eGARCH = mean(local_coverage_adaptive_Emomentum_003, na.rm = TRUE)
+)
+
+# Compare models using both mean and variance of local coverage rates
+model_variances_003 <- list(
+  # Standard CP
+  Standard_CP_GARCH_Normalized = var(local_coverage_fixed_normalized_003, na.rm = TRUE),
+  
+  # Adaptive Simple
+  Adaptive_Simple_GARCH_Normalized = var(local_coverage_adaptive_simple_normalized_003, na.rm = TRUE),
+  
+  # Adaptive Momentum
+  Adaptive_Momentum_eGARCH = var(local_coverage_adaptive_Emomentum_003, na.rm = TRUE)
+)
+
+# Step 1: Best Model for Gamma = 0.03
+models_003 <- c("Standard_CP_GARCH_Normalized", 
+                "Adaptive_Simple_GARCH_Normalized", 
+                "Adaptive_Momentum_eGARCH")
+
+best_model_003 <- models_003[which.min(
+  abs(unlist(model_means_003[models_003]) - 0.9) + 
+    unlist(model_variances_003[models_003])
+)]
+
+# Print Results for Gamma = 0.03
+cat("Best model for Gamma = 0.03:", best_model_003, "with mean:", 
+    model_means_003[[best_model_003]], ", variance:", 
+    model_variances_003[[best_model_003]], "\n")
+```
+
+### Results for Gamma = 0.03: Model Comparison
+
+After comparing the results of the three best models identified for \( \gamma = 0.05 \), the **Adaptive_Simple_GARCH_Normalized** model was selected as the best-performing strategy for \( \gamma = 0.03 \). 
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+### Volatility prediction GAMMA= 0.07
+# GARCH
+GarchConformalForcasting_007 <- function(returns, alpha = 0.1, gamma = 0.07, lookback = 1250, 
+                                         garchP = 1, garchQ = 1, startUp = 100, verbose = FALSE, 
+                                         updateMethod, momentumBW = 0.8, scoreType ) {
+  myT <- length(returns)
+  T0 <- max(startUp, lookback)
+  garchSpec <- ugarchspec(mean.model = list(armaOrder = c(0, 0), include.mean = FALSE), 
+                          variance.model = list(model = "sGARCH", garchOrder = c(garchP, garchQ)), 
+                          distribution.model = "norm")
+  alphat <- alpha
+  ### Initialize data storage variables
+  errSeqOC <- rep(0, myT - T0 + 1)
+  errSeqNC <- rep(0, myT - T0 + 1)
+  alphaSequence <- rep(alpha, myT - T0 + 1)
+  scores <- rep(0, myT - T0 + 1)
+  
+  for (t in T0:myT) {
+    if (verbose) {
+      print(t)
+    }
+    ### Fit GARCH model and compute new conformity score
+    garchFit <- ugarchfit(garchSpec, returns[(t - lookback + 1):(t - 1)], solver = "hybrid")
+    sigmaNext <- sigma(ugarchforecast(garchFit, n.ahead = 1))
+    if (scoreType == "Simple") {
+      scores[t - T0 + 1] <- abs(returns[t]^2 - sigmaNext^2)
+    } else {
+      scores[t - T0 + 1] <- abs(returns[t]^2 - sigmaNext^2) / sigmaNext^2
+    }
+    
+    recentScores <- scores[max(t - T0 + 1 - lookback + 1, 1):(t - T0)]
+    
+    ### Compute errt for both methods
+    errSeqOC[t - T0 + 1] <- as.numeric(scores[t - T0 + 1] > quantile(recentScores, probs = max(0, min(1, 1 - alphat))))
+    errSeqNC[t - T0 + 1] <- as.numeric(scores[t - T0 + 1] > quantile(recentScores, probs = max(0, min(1, 1 - alpha))))
+    
+    ### Update alphat
+    alphaSequence[t - T0 + 1] <- alphat
+    if (updateMethod == "Simple") {
+      alphat <- alphat + gamma * (alpha - errSeqOC[t - T0 + 1])
+    } else if (updateMethod == "Momentum") {
+      w <- rev(momentumBW^(1:(t - T0 + 1)))
+      w <- w / sum(w)
+      alphat <- alphat + gamma * (alpha - sum(errSeqOC[1:(t - T0 + 1)] * w))
+    }
+    if (t %% 100 == 0) {
+      print(sprintf("Done %g steps", t))
+    }
+  }
+  
+  return(list(alphaSequence = alphaSequence, errSeqOC = errSeqOC, errSeqNC = errSeqNC))
+}
+
+results_Studentized_007 <- GarchConformalForcasting_007(returns = returns, alpha = 0.1, gamma = 0.07,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Simple", scoreType ="Studentized")
+results_Simple_007 <- GarchConformalForcasting_007(returns = returns, alpha = 0.1, gamma = 0.07,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Simple", scoreType ="Simple")
+
+date_007 <- index(aapl_prices)[1250:length(index(aapl_prices))]
+alphaSequence_St_007 <- results_Studentized_007[[1]]
+errSeqOC_St_007 <- results_Studentized_007[[2]]; mean(errSeqOC_St_007)
+errSeqNC_St_007 <- results_Studentized_007[[3]]; mean(errSeqNC_St_007)
+
+alphaSequence_Si_007 <- results_Simple_007[[1]]
+errSeqOC_Si_007 <- results_Simple_007[[2]]; mean(errSeqOC_Si_007)
+errSeqNC_Si_007 <- results_Simple_007[[3]]; mean(errSeqNC_Si_007)
+
+results_StudentizedM_007 <- GarchConformalForcasting_007(returns = returns, alpha = 0.1, gamma = 0.07,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Momentum",scoreType ="Studentized")
+alphaSequence_StM_007 <- results_StudentizedM_007[[1]]
+errSeqOC_StM_007 <- results_StudentizedM_007[[2]]; mean(errSeqOC_StM_007)
+errSeqNC_StM_007 <- results_StudentizedM_007[[3]]; mean(errSeqNC_StM_007)
+
+plot(date_007, cummean(errSeqNC_St_007), type = "l", col = "black", ylim = c(0, 0.5), 
+     main = "Error Rates: GARCH Strategies Studentized (gamma = 0.07)", xlab = "Date", ylab = "Cumulative Error Rate")
+lines(date_007, cummean(errSeqOC_St_007), col = "blue")
+lines(date_007, cummean(errSeqOC_StM_007), col = "red",type = "s")
+abline(h = 0.1, col = "green", lty = 2)
+legend("topright", legend = c("Standard CP", "Adaptive Simple", "Adaptive Momentum"), 
+       col = c("black", "blue", "red"), lty = 1)
+
+
+plot(date_007, cummean(errSeqNC_Si_007), type = "l", col = "black", ylim = c(0, 0.5), 
+     main = "Error Rates: GARCH Strategies Simple (gamma = 0.07)", xlab = "Date", ylab = "Cumulative Error Rate")
+lines(date_007, cummean(errSeqOC_Si_007), col = "blue")
+abline(h = 0.1, col = "green", lty = 2)
+legend("topright", legend = c("Standard CP", "Adaptive Simple"), 
+       col = c("black", "blue"), lty = 1)
+
+
+compute_local_coverage <- function(errors, window = 250) {
+  1 - rollmean(errors, k = window, fill = NA)
+}
+
+window_size <- 250
+
+# Generate Local Coverage Rates for Normalized and Non-Normalized Scores
+
+# Local Coverage for Scores Non-Normalized
+local_coverage_fixed_non_normalized_007 <- compute_local_coverage(errSeqNC_Si_007, window = window_size)
+local_coverage_adaptive_simple_non_normalized_007 <- compute_local_coverage(errSeqOC_Si_007, window = window_size)
+
+# Local Coverage for Scores Normalized
+local_coverage_fixed_normalized_007 <- compute_local_coverage(errSeqNC_St_007, window = window_size)
+local_coverage_adaptive_simple_normalized_007 <- compute_local_coverage(errSeqOC_St_007, window = window_size)
+local_coverage_adaptive_momentum_007 <- compute_local_coverage(errSeqOC_StM_007, window = window_size)
+
+# Plot Local Coverage Rates for Non-Normalized Scores
+plot(date_007, local_coverage_adaptive_simple_non_normalized_007, type = "l", col = "blue", ylim = c(0.8, 1),
+     main = "GARCH Local Coverage Rates: Non-Normalized (gamma = 0.07)", xlab = "Date", ylab = "Local Coverage Level")
+lines(date_007, local_coverage_fixed_non_normalized_007, col = "red")
+abline(h = 0.9, col = "black", lty = 2)
+legend("bottomright", legend = c("Adaptive Simple", "Fixed Alpha"), 
+       col = c("blue", "red"), lty = 1)
+
+# Plot Local Coverage Rates for Normalized Scores
+plot(date_007, local_coverage_adaptive_simple_normalized_007, type = "l", col = "blue", ylim = c(0.8, 1),
+     main = "GARCH Local Coverage Rates: Normalized (gamma = 0.07)", xlab = "Date", ylab = "Local Coverage Level")
+lines(date_007, local_coverage_fixed_normalized_007, col = "red")
+lines(date_007, local_coverage_adaptive_momentum_007, col = "green", type="s")
+abline(h = 0.9, col = "black", lty = 2)  # Target coverage level
+legend("bottomright", legend = c("Adaptive Simple", "Fixed Alpha", "Adaptive Momentum"), 
+       col = c("blue", "red", "green"), lty = 1)
+```
+
+### Results for GARCH with Gamma = 0.07
+
+#### Error Rates: Studentized
+For studentized conformity scores, the results with \( \gamma = 0.07 \) closely resemble those observed for \( \gamma = 0.05 \). Both the **Adaptive Simple** and **Adaptive Momentum** strategies perform very well, approaching the target error rate (\( \alpha = 0.1 \)) with nearly identical behavior. The **Standard CP** strategy, as usual, remains farther from the target.
+
+---
+
+#### Error Rates: Non-Normalized
+For non-normalized conformity scores, the **Adaptive Simple** strategy demonstrates clear superiority in approaching the target error rate compared to the **Standard CP**, which consistently shows larger deviations from the target.
+
+---
+
+#### Local Coverage Rates: Non-Normalized
+The local coverage rates for non-normalized conformity scores using \( \gamma = 0.07 \) align closely with the results for \( \gamma = 0.05 \). Both strategies oscillate around the target level (\( 90\% \)), but the **Adaptive Simple** strategy is better aligned compared to the **Standard CP**, which consistently remains above the target.
+
+---
+
+#### Local Coverage Rates: Normalized
+For normalized conformity scores, the **Adaptive Simple** and **Adaptive Momentum** strategies demonstrate strong performance, oscillating closely around the target coverage level (\( 90\% \)), and their results are nearly indistinguishable. The **Standard CP** strategy, as in previous cases, remains consistently above the target.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+### Volatility prediction GAMMA= 0.07
+# eGARCH
+EgarchConformalForcasting_007 <- function(returns, alpha = 0.1, gamma = 0.07, lookback = 1250, 
+                                          garchP = 1, garchQ = 1, startUp = 100, verbose = FALSE, 
+                                          updateMethod, momentumBW = 0.8, scoreType ) {
+  myT <- length(returns)
+  T0 <- max(startUp, lookback)
+  
+  # Updated to eGARCH specification
+  garchSpec <- ugarchspec(mean.model = list(armaOrder = c(0, 0), include.mean = FALSE), 
+                          variance.model = list(model = "eGARCH", garchOrder = c(garchP, garchQ)), 
+                          distribution.model = "norm")
+  
+  alphat <- alpha
+  errSeqOC <- rep(0, myT - T0 + 1)
+  errSeqNC <- rep(0, myT - T0 + 1)
+  alphaSequence <- rep(alpha, myT - T0 + 1)
+  scores <- rep(0, myT - T0 + 1)
+  
+  for (t in T0:myT) {
+    if (verbose) {
+      print(t)
+    }
+    # Fit eGARCH model and compute conformity score
+    garchFit <- ugarchfit(garchSpec, returns[(t - lookback + 1):(t - 1)], solver = "hybrid")
+    sigmaNext <- sigma(ugarchforecast(garchFit, n.ahead = 1))
+    
+    if (scoreType == "Simple") {
+      scores[t - T0 + 1] <- abs(returns[t]^2 - sigmaNext^2)
+    } else {
+      scores[t - T0 + 1] <- abs(returns[t]^2 - sigmaNext^2) / sigmaNext^2
+    }
+    
+    recentScores <- scores[max(t - T0 + 1 - lookback + 1, 1):(t - T0)]
+    errSeqOC[t - T0 + 1] <- as.numeric(scores[t - T0 + 1] > quantile(recentScores, probs = max(0, min(1, 1 - alphat))))
+    errSeqNC[t - T0 + 1] <- as.numeric(scores[t - T0 + 1] > quantile(recentScores, probs = max(0, min(1, 1 - alpha))))
+    
+    alphaSequence[t - T0 + 1] <- alphat
+    if (updateMethod == "Simple") {
+      alphat <- alphat + gamma * (alpha - errSeqOC[t - T0 + 1])
+    } else if (updateMethod == "Momentum") {
+      w <- rev(momentumBW^(1:(t - T0 + 1)))
+      w <- w / sum(w)
+      alphat <- alphat + gamma * (alpha - sum(errSeqOC[1:(t - T0 + 1)] * w))
+    }
+    if (t %% 100 == 0) {
+      print(sprintf("Done %g steps", t))
+    }
+  }
+  
+  return(list(alphaSequence = alphaSequence, errSeqOC = errSeqOC, errSeqNC = errSeqNC))
+}
+
+results_EStudentized_007 <- EgarchConformalForcasting_007(returns = returns, alpha = 0.1, gamma = 0.07,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Simple", scoreType ="Studentized")
+results_ESimple_007 <- EgarchConformalForcasting_007(returns = returns, alpha = 0.1, gamma = 0.07,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Simple", scoreType ="Simple")
+
+date_007 <- index(aapl_prices)[1250:length(index(aapl_prices))]
+alphaSequence_ESt_007 <- results_EStudentized_007[[1]]
+errSeqOC_ESt_007 <- results_EStudentized_007[[2]]; mean(errSeqOC_ESt_007)
+errSeqNC_ESt_007 <- results_EStudentized_007[[3]]; mean(errSeqNC_ESt_007)
+
+alphaSequence_ESi_007 <- results_ESimple_007[[1]]
+errSeqOC_ESi_007 <- results_ESimple_007[[2]]; mean(errSeqOC_ESi_007)
+errSeqNC_ESi_007 <- results_ESimple_007[[3]]; mean(errSeqNC_ESi_007)
+
+results_EStudentizedM_007 <- EgarchConformalForcasting_007(returns = returns, alpha = 0.1, gamma = 0.07,lookback=1250,garchP=1,garchQ=1,startUp = 100,verbose=FALSE,updateMethod="Momentum",scoreType ="Studentized")
+alphaSequence_EStM_007 <- results_EStudentizedM_007[[1]]
+errSeqOC_EStM_007 <- results_EStudentizedM_007[[2]]; mean(errSeqOC_EStM_007)
+errSeqNC_EStM_007 <- results_EStudentizedM_007[[3]]; mean(errSeqNC_EStM_007)
+
+plot(date_007, cummean(errSeqNC_ESt_007), type = "l", col = "black", ylim = c(0, 0.5), 
+     main = "Error Rates: eGARCH Strategies Studentized (gamma = 0.07)", xlab = "Date", ylab = "Cumulative Error Rate")
+lines(date_007, cummean(errSeqOC_ESt_007), col = "blue")
+lines(date_007, cummean(errSeqOC_EStM_007), col = "red",type = "s")
+abline(h = 0.1, col = "green", lty = 2)
+legend("topright", legend = c("Standard CP", "Adaptive Simple", "Adaptive Momentum"), 
+       col = c("black", "blue", "red"), lty = 1)
+
+
+plot(date_007, cummean(errSeqNC_ESi_007), type = "l", col = "black", ylim = c(0, 0.5), 
+     main = "Error Rates: eGARCH Strategies Simple (gamma = 0.07)", xlab = "Date", ylab = "Cumulative Error Rate")
+lines(date_007, cummean(errSeqOC_ESi_007), col = "blue")
+abline(h = 0.1, col = "green", lty = 2)
+legend("topright", legend = c("Standard CP", "Adaptive Simple"), 
+       col = c("black", "blue"), lty = 1)
+
+
+compute_local_coverage <- function(errors, window = 250) {
+  1 - rollmean(errors, k = window, fill = NA)
+}
+
+window_size <- 250
+# Generate Local Coverage Rates for Normalized and Non-Normalized Scores
+
+# Local Coverage for Scores Non-Normalized (eGARCH)
+local_coverage_Efixed_non_normalized_007 <- compute_local_coverage(errSeqNC_ESi_007, window = window_size)
+local_coverage_adaptive_Esimple_non_normalized_007 <- compute_local_coverage(errSeqOC_ESi_007, window = window_size)
+
+# Local Coverage for Scores Normalized (eGARCH)
+local_coverage_Efixed_normalized_007 <- compute_local_coverage(errSeqNC_ESt_007, window = window_size)
+local_coverage_adaptive_Esimple_normalized_007 <- compute_local_coverage(errSeqOC_ESt_007, window = window_size)
+local_coverage_adaptive_Emomentum_007 <- compute_local_coverage(errSeqOC_EStM_007, window = window_size)
+
+# Plot Local Coverage Rates for Non-Normalized Scores (eGARCH)
+plot(date_007, local_coverage_adaptive_Esimple_non_normalized_007, type = "l", col = "blue", ylim = c(0.8, 1),
+     main = "eGARCH Local Coverage Rates: Non-Normalized (gamma = 0.07)", xlab = "Date", ylab = "Local Coverage Level")
+lines(date_007, local_coverage_Efixed_non_normalized_007, col = "red")
+abline(h = 0.9, col = "black", lty = 2)
+legend("bottomright", legend = c("Adaptive Simple", "Fixed Alpha"), 
+       col = c("blue", "red"), lty = 1)
+
+# Plot Local Coverage Rates for Normalized Scores (eGARCH)
+plot(date_007, local_coverage_adaptive_Esimple_normalized_007, type = "l", col = "blue", ylim = c(0.8, 1),
+     main = "eGARCH Local Coverage Rates: Normalized (gamma = 0.07)", xlab = "Date", ylab = "Local Coverage Level")
+lines(date_007, local_coverage_Efixed_normalized_007, col = "red")
+lines(date_007, local_coverage_adaptive_Emomentum_007, col = "green", type="s")
+abline(h = 0.9, col = "black", lty = 2)  # Target coverage level
+legend("bottomright", legend = c("Adaptive Simple", "Fixed Alpha", "Adaptive Momentum"), 
+       col = c("blue", "red", "green"), lty = 1)
+```
+
+### Results for eGARCH with Gamma = 0.07
+
+#### Error Rates: Studentized
+For studentized conformity scores, the results with \( \gamma = 0.07 \) for eGARCH closely align with those observed for GARCH. Both the **Adaptive Simple** and **Adaptive Momentum** strategies approach the target error rate (\( \alpha = 0.1 \)) effectively, with nearly identical performance. The **Standard CP** strategy, as before, remains farther from the target.
+
+---
+
+#### Error Rates: Non-Normalized
+For non-normalized conformity scores, the **Adaptive Simple** strategy with eGARCH shows clear superiority in converging to the target error rate compared to the **Standard CP**, which consistently deviates more significantly.
+
+---
+
+#### Local Coverage Rates: Non-Normalized
+The local coverage rates for non-normalized conformity scores using eGARCH are highly similar to those seen with GARCH. Both the **Adaptive Simple** and **Standard CP** strategies oscillate around the target level (\( 90\% \)), but the **Adaptive Simple** strategy is better aligned, while the **Standard CP** remains consistently above the target.
+
+---
+
+#### Local Coverage Rates: Normalized
+For normalized conformity scores, the **Adaptive Simple** and **Adaptive Momentum** strategies using eGARCH perform nearly identically, oscillating closely around the target coverage level (\( 90\% \)). The **Standard CP** strategy, as in previous cases, remains consistently above the target.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Compare and Select the Best Models for Gamma = 0.07
+model_means_007 <- list(
+  # Standard CP
+  Standard_CP_GARCH_Normalized = mean(local_coverage_fixed_normalized_007, na.rm = TRUE),
+  
+  # Adaptive Simple
+  Adaptive_Simple_GARCH_Normalized = mean(local_coverage_adaptive_simple_normalized_007, na.rm = TRUE),
+  
+  # Adaptive Momentum
+  Adaptive_Momentum_eGARCH = mean(local_coverage_adaptive_Emomentum_007, na.rm = TRUE)
+)
+
+# Compare models using both mean and variance of local coverage rates
+model_variances_007 <- list(
+  # Standard CP
+  Standard_CP_GARCH_Normalized = var(local_coverage_fixed_normalized_007, na.rm = TRUE),
+  
+  # Adaptive Simple
+  Adaptive_Simple_GARCH_Normalized = var(local_coverage_adaptive_simple_normalized_007, na.rm = TRUE),
+  
+  # Adaptive Momentum
+  Adaptive_Momentum_eGARCH = var(local_coverage_adaptive_Emomentum_007, na.rm = TRUE)
+)
+
+# Step 1: Best Model for Gamma = 0.07
+models_007 <- c("Standard_CP_GARCH_Normalized", 
+                "Adaptive_Simple_GARCH_Normalized", 
+                "Adaptive_Momentum_eGARCH")
+
+best_model_007 <- models_007[which.min(
+  abs(unlist(model_means_007[models_007]) - 0.9) + 
+    unlist(model_variances_007[models_007])
+)]
+
+# Print Results for Gamma = 0.07
+cat("Best model for Gamma = 0.07:", best_model_007, "with mean:", 
+    model_means_007[[best_model_007]], ", variance:", 
+    model_variances_007[[best_model_007]], "\n")
+```
+
+### Results for Gamma = 0.07: Model Comparison
+
+After comparing the results of the three best models identified for \( \gamma = 0.05 \), the **Adaptive_Momentum_eGARCH** model was selected as the best-performing strategy for \( \gamma = 0.07 \).
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# Compare Best Models Across All Gamma Values
+final_model_means <- list(
+  Gamma_0.03 = 0.9031802, # Adaptive_Simple_GARCH_Normalized for Gamma = 0.03
+  Gamma_0.05 = 0.9024282, # Adaptive_Momentum_eGARCH for Gamma = 0.05
+  Gamma_0.07 = 0.9015614  # Adaptive_Momentum_eGARCH for Gamma = 0.07
+)
+
+final_model_variances <- list(
+  Gamma_0.03 = 8.091652e-05, # Variance for Gamma = 0.03
+  Gamma_0.05 = 4.937458e-05, # Variance for Gamma = 0.05
+  Gamma_0.07 = 4.062303e-05  # Variance for Gamma = 0.07
+)
+
+# Determine the Best Overall Model
+final_models <- c("Gamma_0.03", "Gamma_0.05", "Gamma_0.07")
+
+best_overall_model <- final_models[which.min(
+  abs(unlist(final_model_means) - 0.9) + 
+    unlist(final_model_variances)
+)]
+
+# Print the Best Overall Model
+cat("Best overall model across all gamma values:", best_overall_model, "with mean:", 
+    final_model_means[[best_overall_model]], ", variance:", 
+    final_model_variances[[best_overall_model]], "\n")
+```
+
+### Final Conclusion: Best Model Across All Gamma Values
+
+The **Adaptive_Momentum_eGARCH** model with \( \gamma = 0.07 \) was the best-performing model overall based on the criteria we used.
+
+The method we used to select the best model (minimizing the difference between the mean local coverage rate and the target, along with the variance of the local coverage rate) was chosen because we considered it representative of the best-performing model. However, we recognize that this approach may be incomplete and could be improved.
+
+# Part 2 - Point a
+
+## Formal Description of AgACI
+
+### Background on Adaptive Conformal Inference (ACI)
+The *Adaptive Conformal Inference (ACI)* framework is designed to create valid prediction intervals for time series data. The key challenge lies in dynamically adapting these intervals to maintain the desired coverage level \(1 - \alpha\), where \(\alpha\) is the miscoverage rate.
+
+In ACI, this adaptation is controlled by an adaptation rate parameter, \(\gamma > 0\), which determines how quickly the intervals respond to changes in the underlying data distribution. Selecting the correct value of \(\gamma\) is crucial, as:
+
+1. **Over-adaptation**: Intervals become too sensitive to noise, leading to instability.
+2. **Under-adaptation**: Intervals fail to adjust to distributional shifts, causing poor coverage.
+
+### Motivation for Aggregated Adaptive Conformal Inference (AgACI)
+The *Aggregated Adaptive Conformal Inference (AgACI)* method addresses the issue of selecting a single \(\gamma\) by introducing a parameter-free ensemble approach. Instead of relying on a fixed \(\gamma\), AgACI combines predictions from multiple experts, each using a distinct \(\gamma_k\).
+
+This adaptive aggregation ensures robust performance across various conditions, mitigating the limitations of ACI.
+
+### Components of AgACI
+
+#### Experts with Different \(\gamma\) Values
+- AgACI defines a set of \(K\) experts, each using a unique \(\gamma_k, k = 1, \dots, K\).
+- These \(\gamma_k\) values span a range of possible adaptation rates, from highly responsive to highly stable.
+
+#### Expert Weights
+- At each time step \(t\), each expert is assigned a weight \(w_k(t)\) representing its confidence level.
+- Initially, weights are uniformly distributed across all experts: \(w_k(0) = \frac{1}{K}\).
+
+#### Prediction Interval Aggregation
+- Each expert \(k\) produces a prediction interval \([L_k(t), U_k(t)]\) based on its \(\gamma_k\).
+- The aggregated interval is computed as:
+
+\[
+[L(t), U(t)] = \left[ \sum_{k=1}^K w_k(t) L_k(t), \sum_{k=1}^K w_k(t) U_k(t) \right].
+\]
+
+#### Weight Updates
+- Weights are updated dynamically at each time step based on the experts' past performance.
+- The **pinball loss** function is used to evaluate expert performance. For a quantile level \(\tau\):
+
+\[
+\mathcal{L}(y_t, \hat{y}_t) = \begin{cases}
+  \tau (y_t - \hat{y}_t), & y_t > \hat{y}_t, \\
+  (1 - \tau)(\hat{y}_t - y_t), & y_t \leq \hat{y}_t.
+\end{cases}
+\]
+
+- Experts with better performance (lower loss) are assigned higher weights in subsequent time steps.
+
+#Point b
+
+## Using EGARCH in AgACI
+
+EGARCH (Exponential Generalized Autoregressive Conditional Heteroskedasticity) models are specifically designed to capture volatility dynamics in financial time series.
+
+### Forecasting Volatility
+EGARCH models the conditional variance of returns, capturing key characteristics such as volatility clustering and asymmetry. The forecasted variance, \( \hat{\sigma}_t^2 \), is the central estimate of volatility.
+
+### Constructing Prediction Intervals
+Prediction intervals can be defined using the forecasted variance scaled by quantiles of the residual distribution:
+
+\[
+\text{Interval} = \left[ \hat{\sigma}_t^2 \cdot Q_{\alpha/2}, \hat{\sigma}_t^2 \cdot Q_{1-\alpha/2} \right]
+\]
+
+where \( Q_\alpha \) represents the quantile of the residuals.
+
+### Conformity Scores
+Conformity scores measure how well the predictions align with observations. For EGARCH, the conformity score is given by:
+
+\[
+S_t = \frac{|r_t^2 - \hat{\sigma}_t^2|}{\hat{\sigma}_t^2}
+\]
+
+### Adaptive Updates
+AgACI dynamically adjusts the size of prediction intervals based on past conformity scores, ensuring robust coverage in changing market conditions.
+
+### Advantages and Limitations of EGARCH
+
+- **Advantages**: EGARCH is designed for volatility modeling, capturing market dynamics such as asymmetry and clustering, and provides probabilistic forecasts.
+
+- **Limitations**: It assumes specific distributions (e.g., normal, Student's t) and may struggle with extreme tail behavior compared to more flexible models.
+
+## Using Quantile Regression in AgACI
+
+Quantile Regression offers a flexible and non-parametric alternative by modeling specific quantiles of the return distribution directly.
+
+### Modeling Return Quantiles
+Quantile Regression predicts the lower and upper quantiles of future returns, forming the basis of prediction intervals:
+
+\[
+\text{Interval} = \left[ \hat{Q}_{\alpha/2}, \hat{Q}_{1-\alpha/2} \right]
+\]
+
+### Adaptive Updates
+AgACI adjusts these quantiles based on observed conformity scores, enabling adaptive prediction intervals.
+
+### Advantages and Limitations of Quantile Regression
+
+- **Advantages**: Quantile Regression is flexible, robust to outliers, and well-suited for modeling extreme tail behavior.
+
+- **Limitations**: It does not explicitly account for volatility dynamics like clustering or asymmetry and focuses solely on return quantiles rather than variance.
+
+## Conclusion
+
+The choice between EGARCH and Quantile Regression in AgACI depends on the specific objectives:
+
+- **EGARCH** excels in capturing volatility dynamics and market behaviors, making it ideal for volatility forecasting.
+
+- **Quantile Regression** provides flexibility and robustness for modeling extreme returns, making it a strong candidate for risk management.
+
+Both approaches complement each other, offering valuable insights into financial time series depending on the context of the analysis.
+
+## Introduction
+The Bernstein Online Aggregation (BOA) is an advanced algorithm for expert aggregation that dynamically combines the predictions from multiple models (or experts) to minimize overall prediction error. It is particularly well-suited for online learning scenarios where data arrives sequentially, and the performance of individual experts can vary over time. BOA is designed to be both adaptive and robust, ensuring that the aggregation process remains stable while quickly responding to changes in expert performance.
+
+## Theoretical Foundation
+BOA is grounded in statistical learning theory and relies on Bernstein inequalities to control the trade-off between bias and variance in the aggregation process. Traditional aggregation methods may suffer from instability due to abrupt weight changes, but BOA addresses this issue by incorporating concentration inequalities that allow for smoother and more controlled weight updates.
+
+Bernstein inequalities provide tighter control over the deviation between the true loss and the empirical loss, especially when dealing with bounded losses. This makes BOA particularly suitable for applications where prediction errors must be tightly managed.
+
+## Working Mechanism
+**Step-by-step process of BOA:**
+
+**Initialization:**
+- Each expert is assigned an initial weight, usually uniform across all experts (e.g., equal weights if no prior information is available).
+
+**Prediction:**
+- At each time step \( t \), each expert provides a prediction for the next data point.
+- BOA computes a weighted average of these predictions using the current weights.
+
+**Loss Computation:**
+- Once the true value is observed, BOA calculates the loss (error) for each expert.
+- The most common loss functions used are the squared loss for regression or the absolute loss for more robust applications.
+
+**Weight Update:**
+- BOA updates the weights of each expert using a rule derived from Bernstein inequalities.
+- Experts that perform poorly receive exponentially decreasing weights, while well-performing experts are rewarded.
+- This update is smoother than in traditional algorithms, preventing extreme changes.
+
+**Aggregation:**
+- The aggregated prediction is a weighted sum of expert predictions, where the weights reflect each expert's historical performance.
+
+**Iteration:**
+- This process repeats for each new data point, allowing BOA to adapt in real-time.
+
+## Mathematical Formulation
+The weight update rule in BOA is designed to minimize the cumulative regret. The weight \( w_i(t) \) for expert \( i \) at time \( t \) is updated based on its cumulative loss using a function that penalizes high variance in predictions.
+
+The general form of the weight update is:
+
+\[
+w_i(t+1) = \frac{w_i(t) \cdot \exp(-\eta \cdot L_i(t))}{Z(t)}
+\]
+
+Where:
+- \( w_i(t) \) is the weight of expert \( i \) at time \( t \).
+- \( L_i(t) \) is the loss of expert \( i \) at time \( t \).
+- \( \eta \) is the learning rate, controlling how quickly the algorithm adapts.
+- \( Z(t) \) is a normalization factor ensuring that the weights sum to 1.
+
+## Advantages of BOA
+- **Adaptive Learning:** Quickly adapts to changes in expert performance, making it suitable for non-stationary environments like financial markets.
+- **Robustness:** Controls weight updates with Bernstein inequalities to avoid overreacting to short-term fluctuations.
+- **Stability:** Smooth weight updates prevent abrupt shifts that can lead to instability.
+- **Regret Minimization:** Designed to minimize regret, ensuring competitiveness with the best expert or combination of experts in hindsight.
+
+## Conclusion
+The Bernstein Online Aggregation (BOA) algorithm is a powerful and adaptive method for combining expert predictions in online learning settings. Its integration of Bernstein inequalities allows for smooth and robust weight updates, making it especially effective in volatile and dynamic environments like financial forecasting. BOA provides a practical and efficient tool for expert aggregation, balancing performance and risk in prediction models.
+
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+library(opera)
+
+agaciVolatilityForecasting <- function(returns, alpha = 0.1, 
+                                       gammaGrid = c(0.03, 0.05, 0.07), 
+                                       lookback = 1250, garchP = 1, garchQ = 1, 
+                                       startUp = 100, verbose = FALSE, 
+                                       updateMethod = "Momentum", momentumBW = 0.80) {
+  myT <- length(returns)
+  T0 <- max(startUp, lookback)
+  
+  
+  garchSpec <- ugarchspec(
+    mean.model = list(armaOrder = c(0, 0), include.mean = FALSE),
+    variance.model = list(model = "eGARCH", garchOrder = c(garchP, garchQ)),
+    distribution.model = "norm"  
+  )
+  
+  # Initialize storage variables
+  K <- length(gammaGrid)  # experts
+  Tlen <- myT - T0
+  
+  
+  garchForecastVec <- rep(NA, Tlen)
+  
+  scores          <- array(NA, dim = Tlen)
+  alphaSeq        <- matrix(alpha, nrow = K, ncol = Tlen)
+  
+  alphaSeq2       <- rep(alpha, Tlen)  
+  
+  errSeqOC        <- matrix(NA, nrow = K, ncol = Tlen)  
+  aggregatedalpha <- rep(NA, Tlen)
+  err             <- rep(NA, Tlen)  
+  
+  lower_limit <- 0.001
+  upper_limit <- 0.999
+  
+  
+  
+  for (t in T0:(myT - 1)) {
+    
+    # Fit GARCH 
+    garchFit     <- ugarchfit(garchSpec, returns[(t - lookback + 1):(t - 1)], solver = "hybrid")
+    sigmaNext    <- sigma(ugarchforecast(garchFit, n.ahead = 1))
+    garchForecast <- sigmaNext^2  
+    
+    colIdx <- t - T0 + 1   
+    
+    
+    garchForecastVec[colIdx] <- garchForecast
+    
+    # Conformity score
+    scores[colIdx] <- abs(returns[t]^2 - sigmaNext^2) / sigmaNext^2  
+    
+    
+    historical <- scores[max(1, colIdx - lookback + 1):(colIdx - 1)]
+    
+    
+    for (g in seq_along(gammaGrid)) {
+      gamma <- gammaGrid[g]
+      
+      if (t == T0) {
+        thr <- quantile(historical, 1 - alpha)
+        errSeqOC[g, colIdx] <- as.numeric(scores[colIdx] > thr)
+        
+        
+      } else {
+        thr <- quantile(historical, 1 - alphaSeq[g, colIdx - 1])
+        errSeqOC[g, colIdx] <- as.numeric(scores[colIdx] > thr)
+        
+        
+        
+        if (updateMethod == "Simple") {
+          alphaSeq[g, colIdx] <- alphaSeq[g, colIdx - 1] + gamma * (alpha - errSeqOC[g, colIdx])
+          
+        } else if (updateMethod == "Momentum") {
+          w <- rev(momentumBW^(1:(colIdx - 1)))
+          w <- w / sum(w)
+          alphaSeq[g, colIdx] <- alphaSeq[g, colIdx - 1] + gamma * (alpha - sum(errSeqOC[g, colIdx] * w))
+        }
+        
+        # Clipping
+        alphaSeq[g, colIdx] <- min(upper_limit, max(lower_limit, alphaSeq[g, colIdx]))
+      }
+    }
+  }
+  
+  
+  cummean_cols <- apply(errSeqOC, 2, cummean)
+  
+  
+  #  Aggregation with BOA
+  aggalpha <- mixture(
+    Y       = alphaSeq2, 
+    experts = t(cummean_cols), 
+    model   = "BOA", 
+    loss.gradient = TRUE,
+    loss.type = 'square'
+  )
+  
+  print(aggalpha$weights)
+  
+  
+  weights_df <- as.data.frame(aggalpha$weights)
+  colnames(weights_df) <- paste0("Expert_", 1:K)  
+  rownames(weights_df) <- paste0("T", 1:nrow(weights_df))  
+  
+  
+  print(head(weights_df, 10))  
+  
+  
+  for (t in T0:(myT - 1)) {
+    colIdx <- t - T0 + 1
+    
+    historical <- scores[max(1, colIdx - lookback + 1):(colIdx - 1)]
+    
+    if (colIdx == 1) {
+      aggregatedalpha[colIdx] <- alpha
+      thr <- quantile(historical, 1 - aggregatedalpha[colIdx])
+      
+      err[colIdx] <- as.numeric(scores[colIdx] > thr)
+      
+    } else {
+      w_t <- aggalpha$weights[colIdx - 1, ]
+      aggregatedalpha[colIdx] <- sum(w_t * alphaSeq[, colIdx])
+      
+      thr <- quantile(historical, 1 - aggregatedalpha[colIdx])
+      
+      err[colIdx] <- as.numeric(scores[colIdx] > thr)
+    }
+  }
+  
+  
+  # Restituzione dei risultati
+  return(list(
+    aggregatedalpha           = aggregatedalpha,
+    err                       = err,
+    errSeqOC                  = errSeqOC,
+    garchForecastVec          = garchForecastVec,
+    alphaSeq                  = alphaSeq,
+    scores                    = scores,
+    weights_df                = weights_df))
+  
+}
+
+# === Application ===
+getSymbols("AAPL", from = "2015-01-01", to = "2023-12-31")
+aapl_prices <- Cl(AAPL)
+returns <- dailyReturn(aapl_prices)
+returns <- na.omit(returns)
+
+
+gammaGrid = c(0.03, 0.05, 0.07)
+print(gammaGrid)
+
+results <- agaciVolatilityForecasting(
+  returns   = returns, 
+  alpha     = 0.1, 
+  gammaGrid = gammaGrid, 
+  lookback  = 1250, 
+  garchP    = 1, 
+  garchQ    = 1, 
+  startUp   = 100,
+  verbose   = TRUE, 
+  updateMethod = "Simple", 
+  momentumBW = 0.80
+)
+
+
+
+myT <- length(returns)
+T0  <- 1250   
+K   <- length(gammaGrid)
+print(K)
+date <- index(returns)[T0 : (myT - 1)]
+
+
+##############################################
+
+err <- results$err
+errSeqOC <- results$errSeqOC
+print(err)
+mean(err)
+
+for (k in 1:K) {
+  print(mean(errSeqOC[k,-1]))
+}
+
+par(mfrow = c(1, 1)) 
+
+
+colors <- rainbow(K)
+
+
+plot(date[-1], cummean(err[-1]), type = "l", col = "black",
+     ylim = c(0, 0.5),
+     main = "Cumulative Errors",
+     xlab = "Data", ylab = expression(alpha))
+
+
+abline(h = 0.1, col = "red", lwd = 0.3, lty = 2)
+
+
+for (k in 1:K) {
+  lines(date[-1], cummean(errSeqOC[k,-1]), col = colors[k], lwd = 1.5)
+}
+
+#Legend
+legend("topright", legend = c("Aggregated", paste("Expert", 1:K)),
+       col = c("black", colors), lty = 1, lwd = 1.5, cex = 0.8)
+```
+
+In the first plot, the cumulative errors of the three experts stabilize over the long term around the target value of 0.1, showing convergence in their performance. However, the aggregated predictor consistently stays at lower levels, suggesting it is able to reduce errors more effectively than the individual experts, likely due to the combination of information from all models.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+# LCR across gammas
+lcr_best_gamma_05 <- compute_local_coverage(errSeqOC_EStM, window = 250)  # Gamma = 0.05
+lcr_best_gamma_03 <- compute_local_coverage(errSeqOC_St_003, window = 250)  # Gamma = 0.03
+lcr_best_gamma_07 <- compute_local_coverage(errSeqOC_EStM_007, window = 250)  # Gamma = 0.07
+lcr_aggregated <- compute_local_coverage(err, window = 250)
+valid_idx <- !is.na(lcr_aggregated)
+date_valid <- date[valid_idx]
+lcr_aggregated_valid <- lcr_aggregated[valid_idx]
+lcr_best_gamma_05_valid <- lcr_best_gamma_05[valid_idx]
+lcr_best_gamma_03_valid <- lcr_best_gamma_03[valid_idx]
+lcr_best_gamma_07_valid <- lcr_best_gamma_07[valid_idx]
+colors_best <- c("blue", "green", "purple")
+
+# LCR
+plot(date_valid, lcr_aggregated_valid, type = "l", col = "black",
+     ylim = c(0.8, 1), main = "Comparison Local Coverage Rate (LCR)",
+     xlab = "Date", ylab = "LCR")
+
+
+abline(h = 0.9, col = "red", lwd = 0.3, lty = 2)
+
+
+lines(date_valid, lcr_best_gamma_05_valid, col = colors_best[1], lwd = 1.5)
+lines(date_valid, lcr_best_gamma_03_valid, col = colors_best[2], lwd = 1.5)
+lines(date_valid, lcr_best_gamma_07_valid, col = colors_best[3], lwd = 1.5)
+
+# Legend
+legend("bottomright", legend = c("Aggregated", "Gamma = 0.05", "Gamma = 0.03", "Gamma = 0.07"), 
+       col = c("black", colors_best), lty = 1, lwd = 1.5, cex = 0.8)
+```
+
+In the second plot, the Local Coverage Rates (LCR) of the three models with different gamma values fluctuate similarly around the target value of 0.9. The aggregated predictor, however, consistently stays at higher levels, often above 0.95, converging towards the target only at the end. This could indicate that the aggregated model generates wider intervals compared to the individual models, thereby including a larger range of values but deviating from the target. This is neither necessarily positive nor negative: it could suggest greater reliability or, conversely, a tendency to overcover, sacrificing accuracy.
+
+## Final Choice
+
+Among the models analyzed, we would choose the **Adaptive Momentum eGARCH with gamma = 0.07** as it achieves a local coverage rate (LCR) closer to the target value. The aggregated model, on the other hand, shows a significantly higher LCR, reaching levels around 0.95, which is well above the desired target. This makes the Adaptive Momentum eGARCH with gamma = 0.07 a more balanced and reliable option for practical use, ensuring better alignment with the target coverage rate.
+
