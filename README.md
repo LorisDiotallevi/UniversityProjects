@@ -19,7 +19,7 @@ Each project applies theoretical concepts to real-world financial and economic d
 📌 **Methods**: Implemented in **R** using R Markdown to analyze predictive intervals and adaptive rates in statistical models.  
 📌 **Files available:**  
    - 📜 **R Markdown file**: [🔗 View `.Rmd` on GitHub](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/Conformal_Inference.Rmd)  
-   - 🌍 **HTML Report**: [🔗 View online](https://LorisDiotallevi.github.io/UniversityProjects/Conformal_Inference.html)  
+   - 🌍 **HTML Report**: [🔗 View online](file:///Users/andreadiotallevi/Downloads/Conformal_Inference.html)  
 
 ---
 
