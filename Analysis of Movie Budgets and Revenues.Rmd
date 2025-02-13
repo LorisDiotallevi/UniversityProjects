@@ -1,0 +1,898 @@
+---
+title: "Analysis of Movie Budgets and Revenues"
+author: "Loris Diotallevi"
+date: "2025-02-13"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introduction
+
+This report presents a comprehensive analysis of the relationship between movie budgets and gross revenues.  
+The dataset includes various movies along with their financial and categorical details.  
+The objective of this analysis is to identify the best statistical model that accurately predicts the gross revenue based on the movie’s budget.
+
+# Libraries
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(mgcv)
+  library(splines)
+  library(caret)
+  library(ggplot2)
+})
+
+library(conflicted)
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+```
+
+# Data Loading and Cleaning
+
+This section describes how the data was loaded and cleaned to prepare for analysis.
+
+```{r}
+# Uploading the data
+movies <- read.csv("C:/Users/andre/Downloads/movies.csv", stringsAsFactors = FALSE, fileEncoding = "ISO-8859-1")
+
+# Handling missing values
+is_invalid_rating <- function(rating) {
+  rating <- tolower(trimws(rating))  # Removes unnecessary spaces
+  grepl("unrated|not rated|not specified", rating) | rating == ""
+}
+movies$rating <- ifelse(is_invalid_rating(movies$rating), NA, movies$rating)
+
+# Handling numeric values (Replaces 0 with NA)
+numeric_fields <- c("budget", "gross", "runtime", "score", "votes", "year")
+movies[numeric_fields] <- lapply(movies[numeric_fields], function(x) replace(x, x == 0 | is.na(x), NA))
+
+# Handling text values (Replaces 'unknown', 'none', 'n/a', and empty strings with NA)
+text_fields <- c("company", "country", "director", "genre", "name", "released", "star", "writer")
+invalid_text_values <- c("", "unknown", "none", "n/a")
+movies[text_fields] <- lapply(movies[text_fields], function(x) ifelse(tolower(trimws(x)) %in% invalid_text_values, NA, x))
+
+# Removing missing values
+movies_clean <- na.omit(movies)
+
+# Calculating the percentage of missing data
+original_missing_data_percentage <- mean(is.na(movies)) * 100
+clean_missing_data_percentage <- mean(is.na(movies_clean)) * 100
+
+# Calculating the range of values for 'gross'
+gross_range_value <- diff(range(movies_clean$gross, na.rm = TRUE))
+
+# Printing the results
+cat("Original missing data percentage:", round(original_missing_data_percentage, 2), "%\n")
+cat("Missing data percentage after cleaning:", round(clean_missing_data_percentage, 2), "%\n")
+cat("Range of values for 'gross':", gross_range_value, "\n")
+```
+
+# Statistical Analysis
+
+## Simple Linear Regression
+
+We begin our analysis of the relationship between **gross** and **budget** by first applying a **simple linear regression**.  
+This method assumes a linear relationship between the two variables and is commonly used as an initial approach to understand how **budget** impacts **gross revenue** (which is the natural response variable).  
+
+A simple linear regression provides a **direct measure** of a movie’s financial success influenced by its budget.
+
+```{r}
+simple_lm <- lm(gross ~ budget, data = movies_clean)
+summary(simple_lm)
+# Plot the simple linear regression
+ggplot(movies_clean, aes(x = budget, y = gross)) +
+  geom_point(color = "blue", shape = 16) +  # Scatter plot of the data points
+  geom_smooth(method = "lm", formula = y ~ x, color = "red") +  # Add the regression line
+  labs(title = "Simple Linear Regression Model",
+       x = "Budget",
+       y = "Gross Revenue") +
+  theme_minimal()
+```
+
+## Polynomial Regression
+
+Polynomial regression is utilized to capture more complex, non-linear patterns that simple linear regression might miss.  
+This method allows us to model the relationship between **budget** and **gross revenue** in a more flexible way by incorporating polynomial terms.
+
+```{r}
+set.seed(1)  # Ensure reproducibility
+
+# Ensure that train_data is defined
+if (!exists("train_data")) {
+  train_data <- movies_clean[, c("gross", "budget"), drop = FALSE]
+  train_data <- subset(train_data, budget > 0)  # Remove movies with a budget of 0
+}
+
+# Explicitly define columns to avoid issues
+train_data <- train_data %>%
+  dplyr::rename(gross = gross, budget = budget) %>%
+  dplyr::mutate(
+    gross = as.numeric(gross),
+    budget = as.numeric(budget)
+  )
+
+# Debugging: Print statements to check if data exists
+cat("✅ Does train_data exist? ", exists("train_data"), "\n")
+cat("✅ Structure of train_data:\n")
+print(str(train_data))
+cat("✅ First rows of train_data:\n")
+print(head(train_data))
+
+# Check if the columns are numeric
+cat("✅ Column classes: ", sapply(train_data, class), "\n")
+
+# Verify if there are NA values
+cat("✅ Are there any NA values in gross? ", any(is.na(train_data$gross)), "\n")
+cat("✅ Are there any NA values in budget? ", any(is.na(train_data$budget)), "\n")
+
+# Define the polynomial degrees to be tested
+degrees <- 1:4
+
+# Perform cross-validation for each polynomial degree
+cv_results <- lapply(degrees, function(degree) {
+  cat("\n🔍 Testing polynomial degree:", degree, "\n")  # Debugging
+
+  # Manually construct polynomial columns
+  train_data_fixed <- train_data
+  for (d in 2:degree) {
+    train_data_fixed[[paste0("budget_poly_", d)]] <- train_data_fixed$budget^d
+  }
+
+  # Dynamically construct the formula
+  formula_poly <- as.formula(
+    paste("gross ~", paste(c("budget", paste0("budget_poly_", 2:degree)), collapse = " + "))
+  )
+
+  cat("📝 Formula used in the model:", format(formula_poly), "\n")  # Debug: Print the constructed formula
+
+  # Train the model
+  model <- train(
+    formula_poly, 
+    data = train_data_fixed, 
+    method = "lm",
+    trControl = trainControl(method = "cv", number = 10, savePredictions = "final")
+  )
+
+  # Retrieve the minimum RMSE
+  if (!is.null(model$results)) {
+    rmse_value <- min(model$results$RMSE, na.rm = TRUE)
+  } else {
+    rmse_value <- NA  # If `model$results` is NULL, assign NA
+  }
+
+  list(Model = model, RMSE = rmse_value)
+})
+
+# Identify the polynomial degree with the lowest RMSE
+best_degree <- degrees[which.min(sapply(cv_results, function(x) x$RMSE))]
+
+# Final refit with the best degree
+final_poly_model <- lm(formula = gross ~ poly(budget, best_degree, raw = TRUE), data = train_data)
+
+# Print the summary of the final model
+summary(final_poly_model)
+
+# Plot the polynomial regression model
+ggplot(train_data, aes(x = budget, y = gross)) +
+  geom_point(alpha = 0.5) +  # Scatter plot with transparency
+  geom_smooth(method = "lm", 
+              formula = as.formula(paste("y ~ poly(x,", best_degree, ", raw = TRUE)")), 
+              se = FALSE, 
+              color = "blue") +  # Polynomial regression curve
+  labs(title = paste("Polynomial Regression Model (Degree:", best_degree, ")"),
+       x = "Budget",
+       y = "Gross Revenue") +
+  theme_minimal()
+```
+
+# Step Functions in Regression
+Step functions help to model changes in gross revenue at different budget levels, capturing distinct budget categories.
+```{r}
+# Set seed for reproducibility
+set.seed(2)
+
+# Define a list of possible break points for step functions
+breaks_list <- list(
+  seq(min(movies_clean$budget), max(movies_clean$budget), length.out = 4),
+  seq(min(movies_clean$budget), max(movies_clean$budget), length.out = 5),
+  seq(min(movies_clean$budget), max(movies_clean$budget), length.out = 6),
+  seq(min(movies_clean$budget), max(movies_clean$budget), length.out = 7)
+)
+
+# Calculate RMSE for each set of breaks using cross-validation
+step_cv_results <- lapply(breaks_list, function(breaks) {
+  movies_clean$budget_cut <- cut(movies_clean$budget, breaks = breaks, include.lowest = TRUE)
+  model_step <- train(gross ~ budget_cut, data = movies_clean, method = "lm",
+                      trControl = trainControl(method = "cv", number = 10, savePredictions = "final"))
+  return(list(Model = model_step, RMSE = min(model_step$results$RMSE)))
+})
+
+# Select the index of the breaks with the lowest RMSE
+best_breaks_index <- which.min(sapply(step_cv_results, function(x) x$RMSE))
+best_breaks <- breaks_list[[best_breaks_index]]
+
+# Reassign the optimal budget cut in the cleaned dataset
+movies_clean$budget_cut <- cut(movies_clean$budget, breaks = best_breaks, include.lowest = TRUE)
+
+# Build the final model using the optimal breaks
+final_step_model <- lm(gross ~ budget_cut, data = movies_clean)
+summary(final_step_model)
+# Plot the model with separate lines for each group
+ggplot(movies_clean, aes(x = budget, y = gross, color = budget_cut)) +
+  geom_point() +
+  geom_smooth(method = "lm", aes(group = budget_cut), se = FALSE) +
+  labs(title = "Step Function Model with Optimal Breaks", x = "Budget", y = "Gross Revenue") +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set1")  # Distinct colors for each segment
+```
+
+## Natural Splines
+
+Natural splines are used to improve the fit by handling **non-linear relationships** without overfitting.  
+Unlike polynomial regression, natural splines restrict the function's behavior at the boundaries, reducing erratic fluctuations at extreme budget values.
+
+```{r}
+set.seed(3)  # Ensure reproducibility
+
+# Ensure that train_data_ns is defined
+if (!exists("train_data_ns")) {
+  train_data_ns <- movies_clean[, c("gross", "budget"), drop = FALSE]
+  train_data_ns <- subset(train_data_ns, budget > 0)  # Remove movies with a budget of 0
+}
+
+# Explicitly define columns to avoid issues
+train_data_ns <- train_data_ns %>%
+  dplyr::rename(gross = gross, budget = budget) %>%
+  dplyr::mutate(
+    gross = as.numeric(gross),
+    budget = as.numeric(budget)
+  )
+
+# Debugging: Print statements to check if data exists
+cat("✅ Does train_data_ns exist? ", exists("train_data_ns"), "\n")
+cat("✅ Structure of train_data_ns:\n")
+print(str(train_data_ns))
+cat("✅ First rows of train_data_ns:\n")
+print(head(train_data_ns))
+
+# Check if the columns are numeric
+cat("✅ Column classes: ", sapply(train_data_ns, class), "\n")
+
+# Verify if there are NA values
+cat("✅ Are there any NA values in gross? ", any(is.na(train_data_ns$gross)), "\n")
+cat("✅ Are there any NA values in budget? ", any(is.na(train_data_ns$budget)), "\n")
+
+# Define the degrees of freedom to be tested
+df_range <- 3:10
+
+# Perform cross-validation for each degree of freedom
+ns_cv_results <- lapply(df_range, function(df) {
+  cat("\n🔍 Testing natural spline with df =", df, "\n")  # Debugging
+
+  # Dynamically create the formula
+  formula_ns <- as.formula(paste("gross ~ ns(budget, df =", df, ")"))
+  cat("📝 Formula used in the model:", format(formula_ns), "\n")  # Debug: Print the constructed formula
+
+  # Train the model
+  model <- train(
+    formula_ns, 
+    data = train_data_ns, 
+    method = "lm",
+    trControl = trainControl(method = "cv", number = 10, savePredictions = "final")
+  )
+
+  # Retrieve the minimum RMSE
+  if (!is.null(model$results)) {
+    rmse_value <- min(model$results$RMSE, na.rm = TRUE)
+  } else {
+    rmse_value <- NA  # If `model$results` is NULL, assign NA
+  }
+
+  list(Model = model, RMSE = rmse_value)
+})
+
+# Identify the best degree of freedom with the lowest RMSE
+best_df <- df_range[which.min(sapply(ns_cv_results, function(x) x$RMSE))]
+
+# Final refit with the best df
+final_ns_model <- lm(formula = as.formula(paste("gross ~ ns(budget,", best_df, ")")), data = train_data_ns)
+
+# Print the summary of the final model
+summary(final_ns_model)
+
+# 🔍 **Visualization**
+ggplot(train_data_ns, aes(x = budget, y = gross)) +
+  geom_point(alpha = 0.6) +  # Scatter plot of data points
+  geom_smooth(method = "lm", 
+              formula = as.formula(paste("y ~ ns(x,", best_df, ")")), 
+              se = FALSE, 
+              color = "blue") +  # Fitting the natural spline model
+  labs(title = paste("Natural Splines Model Fit (df =", best_df, ")"), 
+       x = "Budget", 
+       y = "Gross Revenue") +
+  theme_minimal()
+```
+
+## Smoothing Splines
+
+Smoothing splines are chosen for their ability to provide a flexible fit while controlling for overfitting,  
+making them reliable and preventing the model from memorizing the specific dataset.
+
+```{r}
+library(mgcv)  # Load package for GAM and smoothing splines
+
+# Fit a smoothing spline model
+ss_ln <- gam(gross ~ s(budget), data = movies_clean)
+
+# Display summary of the model
+summary(ss_ln)
+# Compute residuals and residual standard error for smoothing splines
+residual_ss_complete <- resid(ss_ln)
+residual_standard_error_ss_complete <- sqrt(sum(residual_ss_complete^2) / df.residual(ss_ln))
+
+# Print residual standard error
+cat("Residual Standard Error (Smoothing Splines):", residual_standard_error_ss_complete, "\n")
+# Plot the smoothing spline fit
+ggplot(movies_clean, aes(x = budget, y = gross)) +
+  geom_point(alpha = 0.3) +  # Slight transparency to see density of points
+  geom_smooth(method = "gam", formula = y ~ s(x), se = FALSE, color = "blue") +  # Smoothing spline curve
+  labs(title = "Smoothing Spline Fit for Gross vs. Budget",
+       x = "Budget (USD)", 
+       y = "Gross Revenue (USD)") +
+  theme_minimal()
+```
+
+## Local Regression
+
+Local regression offers insight into localized trends but lacks consistency across the broader dataset.
+
+```{r}
+# Define a grid of possible span values
+span_values <- seq(0.1, 1, by = 0.1)
+
+# Initialize a vector to store RMSE for each span
+rmse_values <- numeric(length(span_values))
+
+# Perform cross-validation to evaluate different span values
+for (i in seq_along(span_values)) {
+  loess_model <- loess(gross ~ budget, data = movies_clean, span = span_values[i], control = loess.control(surface = "direct"))
+  
+  # Compute residuals and RMSE
+  residuals <- movies_clean$gross - predict(loess_model)
+  rmse_values[i] <- sqrt(mean(residuals^2, na.rm = TRUE))
+}
+
+# Find the best span based on the minimum RMSE
+best_span_index <- which.min(rmse_values)
+best_span <- span_values[best_span_index]
+
+# Fit the best local regression model using the optimal span
+best_loess_model <- loess(gross ~ budget, data = movies_clean, span = best_span, control = loess.control(surface = "direct"))
+
+# Display summary of the best model
+summary(best_loess_model)
+# Generate predictions from the best LOESS model
+predictions_loess <- predict(best_loess_model, newdata = movies_clean)
+
+# Compute residuals
+residuals_loess <- movies_clean$gross - predictions_loess
+
+# Compute R-squared
+r_squared_loess <- 1 - (sum(residuals_loess^2) / sum((movies_clean$gross - mean(movies_clean$gross))^2))
+
+# Number of predictors in the LOESS model (excluding intercept)
+requested_loess <- 1  # LOESS has one main predictor (budget)
+
+# Compute Adjusted R-squared
+adj_r_squared_loess <- 1 - ((1 - r_squared_loess) * (nrow(movies_clean) - 1) / (nrow(movies_clean) - requested_loess - 1))
+
+# Print Adjusted R-squared
+cat("Adjusted R-Squared (Local Regression):", adj_r_squared_loess, "\n")
+# Compute RMSE for the LOESS model
+rmse_loess <- sqrt(mean(residuals_loess^2, na.rm = TRUE))
+
+# Print RMSE
+cat("RMSE (Local Regression):", rmse_loess, "\n")
+# Plot the LOESS regression with the best span
+ggplot(movies_clean, aes(x = budget, y = gross)) +
+  geom_point(alpha = 0.3, color = "red") +  # Slight transparency to see density
+  geom_smooth(method = "loess", span = best_span, se = FALSE, color = "blue") +  # LOESS curve with best span
+  labs(title = "Local Regression Fit with Optimal Span",
+       x = "Budget",
+       y = "Gross Revenue") +
+  theme_minimal()
+```
+
+## Model Selection Summary
+
+```{r}
+# Function to compute RMSE and R-squared
+calculate_metrics <- function(actual, predicted) {
+  residuals <- actual - predicted
+  
+  # Compute RMSE
+  rmse_value <- sqrt(mean(residuals^2, na.rm = TRUE))
+  
+  # Compute R-squared
+  r_squared_value <- 1 - (sum(residuals^2) / sum((actual - mean(actual))^2))
+  
+  return(list(RMSE = rmse_value, R_squared = r_squared_value))
+}
+# Define the models and obtain predictions
+models_list <- list(
+  lm = simple_lm,
+  poly = final_poly_model,
+  step = final_step_model,
+  ns = final_ns_model,
+  loess = best_loess_model
+)
+
+predictions_list <- list(
+  lm = predict(simple_lm, newdata = movies_clean),
+  poly = predict(final_poly_model, newdata = movies_clean),
+  step = predict(final_step_model, newdata = movies_clean),
+  ns = predict(final_ns_model, newdata = movies_clean),
+  loess = predict(best_loess_model, newdata = movies_clean)
+)
+# Initialize a data frame to store model selection results
+model_comparison <- data.frame(
+  Model = names(models_list),
+  RMSE = NA,
+  R_squared = NA
+)
+
+# Compute RMSE and R-squared for each model
+for (i in seq_along(models_list)) {
+  metrics <- calculate_metrics(movies_clean$gross, predictions_list[[i]])
+  model_comparison$RMSE[i] <- metrics$RMSE
+  model_comparison$R_squared[i] <- metrics$R_squared
+}
+
+# Display the results
+print(model_comparison)
+# RMSE of Different Models
+ggplot(model_comparison, aes(x = reorder(Model, RMSE), y = RMSE)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "RMSE of Different Models",
+       x = "Model",
+       y = "RMSE") +
+  theme_minimal()
+# R-squared of Different Models
+ggplot(model_comparison, aes(x = reorder(Model, R_squared), y = R_squared)) +
+  geom_bar(stat = "identity", fill = "lightblue") +
+  labs(title = "R-squared of Different Models",
+       x = "Model",
+       y = "R-squared") +
+  theme_minimal()
+```
+
+## Conclusion
+
+Based on the results I have plotted and reported, the Local Regression (LOESS) model is determined to be the best for explaining the relationship between movie budgets and gross revenue.  
+This conclusion is drawn because the LOESS model had the lowest RMSE and the highest R-squared, indicating its superior performance in capturing the underlying patterns in the data.
+
+---
+
+## Analysis for PG-13 Rated Movies
+
+In this section, we apply the same regression methods to a subset of movies rated **PG-13** to observe how model performance varies within this specific classification.
+
+### Filtering PG-13 Rated Movies
+
+Before proceeding with PG-13 based analysis, we first filter the `movies_clean` dataset to include only those movies that have a **PG-13** rating.
+
+```{r}
+movies_PG13 <- movies_clean %>% filter(rating == "PG-13")
+```
+
+## Simple Linear Regression (PG-13)
+
+First, we apply **simple linear regression** to examine the direct relationship between **budget** and **gross revenue** for PG-13 rated movies.
+
+```{r}
+# Create a simple linear regression model for PG-13 movies
+simple_lm_PG13 <- lm(gross ~ budget, data = movies_PG13)
+
+# Display summary of the model
+summary(simple_lm_PG13)
+
+# Plot the regression model for PG-13 movies
+ggplot(movies_PG13, aes(x = budget, y = gross)) +
+  geom_point() +  # Adds scatter plot points
+  geom_smooth(method = "lm", formula = y ~ x, color = "blue") +  # Adds the regression line
+  labs(title = "Simple Linear Regression Model for PG-13 Movies",
+       x = "Budget",
+       y = "Gross Revenue") +
+  theme_minimal()
+```
+
+## Polynomial Regression (PG-13)
+
+Next, we employ **polynomial regression**.
+
+```{r}
+set.seed(1)  # Ensure reproducibility
+
+# Ensure that train_data_pg13 is defined
+if (!exists("train_data_pg13")) {
+  train_data_pg13 <- movies_PG13[, c("gross", "budget"), drop = FALSE]
+  train_data_pg13 <- subset(train_data_pg13, budget > 0)  # Remove movies with a budget of 0
+}
+
+# Explicitly define columns to avoid issues
+train_data_pg13 <- train_data_pg13 %>%
+  dplyr::rename(gross = gross, budget = budget) %>%
+  dplyr::mutate(
+    gross = as.numeric(gross),
+    budget = as.numeric(budget)
+  )
+
+# Debugging: Print statements to check if data exists
+cat("✅ Does train_data_pg13 exist? ", exists("train_data_pg13"), "\n")
+cat("✅ Structure of train_data_pg13:\n")
+print(str(train_data_pg13))
+cat("✅ First rows of train_data_pg13:\n")
+print(head(train_data_pg13))
+
+# Check if the columns are numeric
+cat("✅ Column classes: ", sapply(train_data_pg13, class), "\n")
+
+# Verify if there are NA values
+cat("✅ Are there any NA values in gross? ", any(is.na(train_data_pg13$gross)), "\n")
+cat("✅ Are there any NA values in budget? ", any(is.na(train_data_pg13$budget)), "\n")
+
+# Define the polynomial degrees to be tested
+degrees_pg13 <- 1:4
+
+# Perform cross-validation for each polynomial degree
+cv_results_pg13 <- lapply(degrees_pg13, function(degree) {
+  cat("\n🔍 Testing polynomial degree:", degree, "\n")  # Debugging
+
+  # Manually construct polynomial columns
+  train_data_fixed_pg13 <- train_data_pg13
+  for (d in 2:degree) {
+    train_data_fixed_pg13[[paste0("budget_poly_", d)]] <- train_data_fixed_pg13$budget^d
+  }
+
+  # Dynamically construct the formula
+  formula_poly_pg13 <- as.formula(
+    paste("gross ~", paste(c("budget", paste0("budget_poly_", 2:degree)), collapse = " + "))
+  )
+
+  cat("📝 Formula used in the model:", format(formula_poly_pg13), "\n")  # Debug: Print the constructed formula
+
+  # Train the model
+  model_pg13 <- train(
+    formula_poly_pg13, 
+    data = train_data_fixed_pg13, 
+    method = "lm",
+    trControl = trainControl(method = "cv", number = 10, savePredictions = "final")
+  )
+
+  # Retrieve the minimum RMSE
+  if (!is.null(model_pg13$results)) {
+    rmse_value_pg13 <- min(model_pg13$results$RMSE, na.rm = TRUE)
+  } else {
+    rmse_value_pg13 <- NA  # If `model_pg13$results` is NULL, assign NA
+  }
+
+  list(Model = model_pg13, RMSE = rmse_value_pg13)
+})
+
+# Identify the polynomial degree with the lowest RMSE
+best_degree_pg13 <- degrees_pg13[which.min(sapply(cv_results_pg13, function(x) x$RMSE))]
+
+# Final refit with the best degree
+final_poly_model_pg13 <- lm(formula = gross ~ poly(budget, best_degree_pg13, raw = TRUE), data = train_data_pg13)
+
+# Print the summary of the final model
+summary(final_poly_model_pg13)
+
+# Plot the polynomial regression model for PG-13 movies
+ggplot(train_data_pg13, aes(x = budget, y = gross)) +
+  geom_point() +  # Scatter plot of data
+  geom_smooth(method = "lm", 
+              formula = as.formula(paste("y ~ poly(x,", best_degree_pg13, ", raw = TRUE)")), 
+              se = FALSE, 
+              color = "blue") +  # Polynomial regression curve
+  labs(title = paste("Polynomial Regression Model (Degree:", best_degree_pg13, ") for PG-13 Movies"),
+       x = "Budget",
+       y = "Gross Revenue") +
+  theme_minimal()
+```
+
+## Step Functions (PG-13)
+
+Now we employ **step functions**.
+
+```{r}
+set.seed(1)  # Ensure reproducibility
+
+# Define a list of possible break points for the step function
+breaks_list_pg13 <- list(
+  seq(min(movies_PG13$budget), max(movies_PG13$budget), length.out = 4),
+  seq(min(movies_PG13$budget), max(movies_PG13$budget), length.out = 5),
+  seq(min(movies_PG13$budget), max(movies_PG13$budget), length.out = 6),
+  seq(min(movies_PG13$budget), max(movies_PG13$budget), length.out = 7)
+)
+
+# Calculate RMSE for each set of breaks using cross-validation
+cv_results_pg13 <- lapply(breaks_list_pg13, function(breaks) {
+  movies_PG13$budget_cut <- cut(movies_PG13$budget, breaks = breaks, include.lowest = TRUE)
+  step_model_pg13 <- train(gross ~ budget_cut, 
+                           data = movies_PG13, 
+                           method = "lm", 
+                           trControl = trainControl(method = "cv", number = 10, savePredictions = "final"))
+  
+  # Return RMSE for each break setup
+  list(Model = step_model_pg13, RMSE = min(step_model_pg13$results$RMSE))
+})
+
+# Select the index of the breaks with the lowest RMSE
+best_break_index_pg13 <- which.min(sapply(cv_results_pg13, function(x) x$RMSE))
+best_breaks_pg13 <- breaks_list_pg13[[best_break_index_pg13]]
+
+# Assign the optimal budget cut in the PG-13 dataset
+movies_PG13$budget_cut <- cut(movies_PG13$budget, breaks = best_breaks_pg13, include.lowest = TRUE)
+
+# Fit the final step function model using the optimal breaks
+final_step_model_pg13 <- lm(gross ~ budget_cut, data = movies_PG13)
+
+# Display summary of the final model
+summary(final_step_model_pg13)
+# Plot the model with stepwise lines for each group
+ggplot(movies_PG13, aes(x = budget, y = gross, color = budget_cut)) +
+  geom_point() +  # Scatter plot of data points
+  geom_smooth(method = "lm", aes(group = budget_cut), se = FALSE) +  # Stepwise regression lines
+  labs(title = "Step Function Model with Optimal Breaks for PG-13 Movies", 
+       x = "Budget", 
+       y = "Gross Revenue") +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set1")  # Distinct colors for each segment
+```
+
+## Natural Splines (PG-13)
+
+Now we employ **natural splines**.
+
+```{r}
+set.seed(3)  # Ensure reproducibility
+
+# Ensure that train_data_ns_pg13 is defined
+if (!exists("train_data_ns_pg13")) {
+  train_data_ns_pg13 <- movies_PG13[, c("gross", "budget"), drop = FALSE]
+  train_data_ns_pg13 <- subset(train_data_ns_pg13, budget > 0)  # Remove movies with a budget of 0
+}
+
+# Explicitly define columns to avoid issues
+train_data_ns_pg13 <- train_data_ns_pg13 %>%
+  dplyr::rename(gross = gross, budget = budget) %>%
+  dplyr::mutate(
+    gross = as.numeric(gross),
+    budget = as.numeric(budget)
+  )
+
+# Debugging: Print statements to check if data exists
+cat("✅ Does train_data_ns_pg13 exist? ", exists("train_data_ns_pg13"), "\n")
+cat("✅ Structure of train_data_ns_pg13:\n")
+print(str(train_data_ns_pg13))
+cat("✅ First rows of train_data_ns_pg13:\n")
+print(head(train_data_ns_pg13))
+
+# Check if the columns are numeric
+cat("✅ Column classes: ", sapply(train_data_ns_pg13, class), "\n")
+
+# Verify if there are NA values
+cat("✅ Are there any NA values in gross? ", any(is.na(train_data_ns_pg13$gross)), "\n")
+cat("✅ Are there any NA values in budget? ", any(is.na(train_data_ns_pg13$budget)), "\n")
+
+# Define the degrees of freedom to be tested
+df_range_pg13 <- 3:10
+
+# Perform cross-validation for each degree of freedom
+ns_cv_results_pg13 <- lapply(df_range_pg13, function(df) {
+  cat("\n🔍 Testing natural spline with df =", df, "\n")  # Debugging
+
+  # Dynamically create the formula
+  formula_ns_pg13 <- as.formula(paste("gross ~ ns(budget, df =", df, ")"))
+  cat("📝 Formula used in the model:", format(formula_ns_pg13), "\n")  # Debug: Print the constructed formula
+
+  # Train the model
+  model_pg13 <- train(
+    formula_ns_pg13, 
+    data = train_data_ns_pg13, 
+    method = "lm",
+    trControl = trainControl(method = "cv", number = 10, savePredictions = "final")
+  )
+
+  # Retrieve the minimum RMSE
+  if (!is.null(model_pg13$results)) {
+    rmse_value_pg13 <- min(model_pg13$results$RMSE, na.rm = TRUE)
+  } else {
+    rmse_value_pg13 <- NA  # If `model_pg13$results` is NULL, assign NA
+  }
+
+  list(Model = model_pg13, RMSE = rmse_value_pg13)
+})
+
+# Identify the best degree of freedom with the lowest RMSE
+best_df_pg13 <- df_range_pg13[which.min(sapply(ns_cv_results_pg13, function(x) x$RMSE))]
+
+# Final refit with the best df
+final_ns_model_pg13 <- lm(formula = as.formula(paste("gross ~ ns(budget,", best_df_pg13, ")")), data = train_data_ns_pg13)
+
+# Print the summary of the final model
+summary(final_ns_model_pg13)
+
+# 🔍 **Visualization**
+ggplot(train_data_ns_pg13, aes(x = budget, y = gross)) +
+  geom_point(alpha = 0.6) +  # Scatter plot of data points
+  geom_smooth(method = "lm", 
+              formula = as.formula(paste("y ~ ns(x,", best_df_pg13, ")")), 
+              se = FALSE, 
+              color = "blue") +  # Fitting the natural spline model
+  labs(title = paste("Natural Splines Model Fit (df =", best_df_pg13, ") for PG-13 Movies"), 
+       x = "Budget", 
+       y = "Gross Revenue") +
+  theme_minimal()
+```
+
+## Smoothing Splines (PG-13)
+
+Now we apply **smoothing splines**.
+
+```{r}
+# Fit a smoothing spline model for PG-13 movies
+ss_pg13 <- gam(gross ~ s(budget), data = movies_PG13)
+
+# Display summary of the model
+summary(ss_pg13)
+# Compute residuals for the smoothing spline model
+residuals_ss_pg13 <- resid(ss_pg13)
+
+# Compute Residual Standard Error
+residual_standard_error_ss_pg13 <- sqrt(sum(residuals_ss_pg13^2) / df.residual(ss_pg13))
+
+# Print Residual Standard Error
+cat("Residual Standard Error (Smoothing Splines, PG-13):", residual_standard_error_ss_pg13, "\n")
+# Plot the smoothing spline fit
+ggplot(movies_PG13, aes(x = budget, y = gross)) +
+  geom_point(alpha = 0.3) +  # Scatter plot with transparency
+  geom_smooth(method = "gam", formula = y ~ s(x), se = FALSE, color = "blue") +  # Smoothing spline curve
+  labs(title = "Smoothing Spline Fit for PG-13 Movies",
+       x = "Budget (USD)", 
+       y = "Gross Revenue (USD)") +
+  theme_minimal()
+```
+
+## Local Regression (PG-13)
+
+Lastly, **local regression** is applied.
+
+```{r}
+library(ggplot2)
+
+# Define a grid of possible span values
+span_values_pg13 <- seq(0.1, 1, by = 0.1)
+
+# Initialize a vector to store RMSE for each span
+rmse_values_pg13 <- numeric(length(span_values_pg13))
+
+# Perform cross-validation to evaluate different span values
+for (i in seq_along(span_values_pg13)) {
+  loess_model_pg13 <- loess(gross ~ budget, data = movies_PG13, span = span_values_pg13[i], 
+                            control = loess.control(surface = "direct"))
+  
+  # Compute residuals and RMSE
+  residuals_pg13 <- movies_PG13$gross - predict(loess_model_pg13)
+  rmse_values_pg13[i] <- sqrt(mean(residuals_pg13^2, na.rm = TRUE))
+}
+
+# Find the best span based on the minimum RMSE
+best_span_index_pg13 <- which.min(rmse_values_pg13)
+best_span_pg13 <- span_values_pg13[best_span_index_pg13]
+
+# Fit the best local regression model using the optimal span
+best_loess_model_pg13 <- loess(gross ~ budget, data = movies_PG13, span = best_span_pg13, 
+                              control = loess.control(surface = "direct"))
+
+# Display summary of the best model
+summary(best_loess_model_pg13)
+# Generate predictions from the best LOESS model
+predictions_loess_pg13 <- predict(best_loess_model_pg13, newdata = movies_PG13)
+
+# Compute residuals
+residuals_loess_pg13 <- movies_PG13$gross - predictions_loess_pg13
+
+# Compute R-squared
+r_squared_loess_pg13 <- 1 - (sum(residuals_loess_pg13^2) / sum((movies_PG13$gross - mean(movies_PG13$gross))^2))
+
+# Number of predictors in the LOESS model (excluding intercept)
+requested_loess_pg13 <- 1  # LOESS has one main predictor (budget)
+
+# Compute Adjusted R-squared
+adj_r_squared_loess_pg13 <- 1 - ((1 - r_squared_loess_pg13) * (nrow(movies_PG13) - 1) / (nrow(movies_PG13) - requested_loess_pg13 - 1))
+
+# Print Adjusted R-squared
+cat("Adjusted R-Squared (Local Regression, PG-13):", adj_r_squared_loess_pg13, "\n")
+# Compute RMSE for the LOESS model
+rmse_loess_pg13 <- sqrt(mean(residuals_loess_pg13^2, na.rm = TRUE))
+
+# Print RMSE
+cat("RMSE (Local Regression, PG-13):", rmse_loess_pg13, "\n")
+# Plot the LOESS regression with the best span
+ggplot(movies_PG13, aes(x = budget, y = gross)) +
+  geom_point(alpha = 0.3, color = "red") +  # Slight transparency to see density
+  geom_smooth(method = "loess", span = best_span_pg13, se = FALSE, color = "blue") +  # LOESS curve with best span
+  labs(title = paste("Local Regression Fit with Optimal Span for PG-13 Movies:", best_span_pg13),
+       x = "Budget",
+       y = "Gross Revenue") +
+  theme_minimal()
+```
+
+## Model Selection (PG-13)
+
+### Functions to Calculate RMSE and R-squared
+
+```{r}
+# Function to compute RMSE and R-squared
+calculate_rmse <- function(actual, predicted) {
+  sqrt(mean((actual - predicted)^2, na.rm = TRUE))
+}
+
+calculate_r_squared <- function(actual, predicted) {
+  1 - (sum((actual - predicted)^2) / sum((actual - mean(actual))^2))
+}
+# Define the models and obtain predictions
+models_pg13 <- list(
+  lm = simple_lm_PG13,
+  poly = final_poly_model_pg13,
+  step = final_step_model_pg13,
+  ns = final_ns_model_pg13,
+  loess = best_loess_model_pg13
+)
+
+predictions_pg13 <- list(
+  lm = predict(simple_lm_PG13, newdata = movies_PG13),
+  poly = predict(final_poly_model_pg13, newdata = movies_PG13),
+  step = predict(final_step_model_pg13, newdata = movies_PG13),
+  ns = predict(final_ns_model_pg13, newdata = movies_PG13),
+  loess = predict(best_loess_model_pg13, newdata = movies_PG13)
+)
+# Initialize a data frame to store model selection results
+model_comparison_pg13 <- data.frame(
+  Model = names(models_pg13),
+  RMSE = NA,
+  R_squared = NA
+)
+
+# Compute RMSE and R-squared for each model
+for (i in seq_along(models_pg13)) {
+  model_comparison_pg13$RMSE[i] <- calculate_rmse(movies_PG13$gross, predictions_pg13[[i]])
+  model_comparison_pg13$R_squared[i] <- calculate_r_squared(movies_PG13$gross, predictions_pg13[[i]])
+}
+
+# Display the results
+print(model_comparison_pg13)
+# Plot RMSE of different models for PG-13 movies
+ggplot(model_comparison_pg13, aes(x = reorder(Model, RMSE), y = RMSE)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "RMSE of Different Models for PG-13 Movies",
+       x = "Model",
+       y = "RMSE") +
+  theme_minimal()
+# Plot R-Squared of different models for PG-13 movies
+ggplot(model_comparison_pg13, aes(x = reorder(Model, R_squared), y = R_squared)) +
+  geom_bar(stat = "identity", fill = "lightblue") +
+  labs(title = "R-Squared of Different Models for PG-13 Movies",
+       x = "Model",
+       y = "R-Squared") +
+  theme_minimal()
+```
+
+## Conclusion
+
+Based on the results plotted and reported, the **Local Regression (LOESS)** model is determined to be the best for explaining the relationship between **movie budgets** and **gross revenues** in the **PG-13 subset**.  
+
+This conclusion is drawn because the **LOESS model had the lowest RMSE** and the **highest R-squared**, indicating, once again, its **superior performance** in capturing the underlying patterns in the data.
