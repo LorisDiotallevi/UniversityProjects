@@ -21,8 +21,13 @@ Each project applies theoretical concepts to real-world financial and economic d
    - 📜 **R Markdown file**: [🔗 View `.Rmd` on GitHub](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/Conformal_Inference.Rmd)  
    - 🌍 **HTML Report**: [🔗 View online](https://LorisDiotallevi.github.io/UniversityProjects/Conformal_Inference.html)  
 
-📌 **Note**: Due to file size limitations, GitHub cannot preview `Conformal_Inference.html` directly.  
-Please use the link above to access the full report.
+---
+
+### 3️⃣ Movie Regression Analysis  
+📌 **Objective**: Analyze relationships between various factors in the movie industry using **regression models**.  
+📌 **Files available:**  
+   - 📜 **R Markdown file**: [🔗 View `.Rmd` on GitHub](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/Conformal_Inference.Rmd)  
+   - 🌍 **HTML Report**: [🔗 View online](file:///C:/Users/andre/Downloads/Analysis%20of%20Movie%20Budgets%20and%20Revenues.html) 
 
 ---
 
@@ -47,6 +52,7 @@ Please use the link above to access the full report.
 
 ## 📢 Stay Updated  
 Follow me on [LinkedIn](https://www.linkedin.com/in/loris-diotallevi/) for more projects in **quantitative finance and machine learning**! 🚀  
+
 
 
 
