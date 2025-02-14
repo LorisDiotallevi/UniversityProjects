@@ -27,7 +27,7 @@ Each project applies theoretical concepts to real-world financial and economic d
 📌 **Objective**: Analyze relationships between various factors in the movie industry using **regression models**.  
 📌 **Files available:**  
    - 📜 **R Markdown file**: [🔗 View `.Rmd` on GitHub](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/Analysis%20of%20Movie%20Budgets%20and%20Revenues.Rmd)  
-   - 🌍 **HTML Report**: [🔗 View online](file:///Users/andreadiotallevi/Downloads/Analysis%20of%20Movie%20Budgets%20and%20Revenues.html) 
+   - 🌍 **HTML Report**: [🔗 View online](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/Analysis%20of%20Movie%20Budgets%20and%20Revenues.html) 
 
 ---
 
