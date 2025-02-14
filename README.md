@@ -19,7 +19,7 @@ Each project applies theoretical concepts to real-world financial and economic d
 📌 **Methods**: Implemented in **R** using R Markdown to analyze predictive intervals and adaptive rates in statistical models.  
 📌 **Files available:**  
    - 📜 **R Markdown file**: [🔗 View `.Rmd` on GitHub](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/Conformal_Inference.Rmd)  
-   - 🌍 **HTML Report**: [🔗 View online](file:///Users/andreadiotallevi/Downloads/Conformal_Inference.html)  
+   - 🌍 **HTML Report**: [🔗 View online](https://lorisdiotallevi.github.io/UniversityProjects/Conformal_Inference.html)  
 
 ---
 
@@ -27,7 +27,7 @@ Each project applies theoretical concepts to real-world financial and economic d
 📌 **Objective**: Analyze relationships between various factors in the movie industry using **regression models**.  
 📌 **Files available:**  
    - 📜 **R Markdown file**: [🔗 View `.Rmd` on GitHub](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/Analysis%20of%20Movie%20Budgets%20and%20Revenues.Rmd)  
-   - 🌍 **HTML Report**: [🔗 View online](file:///Users/andreadiotallevi/Downloads/Analysis%20of%20Movie%20Budgets%20and%20Revenues.html) 
+   - 🌍 **HTML Report**: [🔗 View online](https://LorisDiotallevi.github.io/UniversityProjects/movie_analysis.html) 
 
 ---
 
