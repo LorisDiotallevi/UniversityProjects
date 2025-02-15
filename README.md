@@ -15,7 +15,7 @@ Each project applies theoretical concepts to real-world financial and economic d
    - Comparison between **CRR** and **Jarrow-Rudd** parameterizations  
 📌 **Files available:**  
    - 📜 **Project Report (PDF)**: [🔗 View on GitHub](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/CRR%20model.pdf)  
-   - 📂 **Google Colab Notebook**: [🔗 View on GitHub](#)  
+   - 📂 **Google Colab Notebook**: [🔗 View on GitHub](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/CRR_model.ipynb)  
 
 ---
 
