@@ -60,6 +60,18 @@ Each project applies theoretical concepts to real-world financial and economic d
 
 ---
 
+### 6️⃣ Principal Component Analysis (PCA) and Dimensionality Reduction  
+📌 **Objective**: Apply **Principal Component Analysis (PCA)** to a vehicle dataset to reduce dimensionality while retaining most of the variance, and evaluate the effect using a **K-Nearest Neighbors (KNN)** classifier.  
+📌 **Methods**:  
+   - Standardization of features  
+   - PCA to find principal components  
+   - Visualizations: 2D scatterplot, 3D static plot, pairplots, loadings analysis  
+   - KNN model evaluation with cross-validation before and after dimensionality reduction  
+📌 **File available:**  
+   - 📂 **Google Colab Notebook**: [🔗 View on GitHub](https://github.com/LorisDiotallevi/UniversityProjects/blob/main/PCA_Project.ipynb)  
+     
+---
+
 ## 🚀 How to Use  
 
 📌 **View the notebooks** directly in GitHub by clicking the links above.  
